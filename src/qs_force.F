@@ -34,6 +34,7 @@ MODULE qs_force
    USE dft_plus_u,                      ONLY: plus_u
    USE efield_utils,                    ONLY: calculate_ecore_efield
    USE energy_corrections,              ONLY: energy_correction
+   USE excited_states,                  ONLY: excited_state_energy
    USE input_constants,                 ONLY: do_admm_purify_none
    USE input_section_types,             ONLY: section_vals_get_subs_vals,&
                                               section_vals_type,&
@@ -334,19 +335,7 @@ CONTAINS
          energy%total = energy%total + energy%mp2
 
          ! Compute MP2 properties
-         ! Get the HF+MP2 density
-         DO ispin = 1, dft_control%nspins
-            CALL dbcsr_add(rho_ao(ispin)%matrix, matrix_p_mp2(ispin)%matrix, 1.0_dp, 1.0_dp)
-         END DO
-         CALL qs_rho_update_rho(rho, qs_env=qs_env)
-         CALL qs_ks_did_change(ks_env, rho_changed=.TRUE.)
          CALL qs_scf_compute_properties(qs_env, wf_type='MP2   ')
-         ! Get everything back
-         DO ispin = 1, dft_control%nspins
-            CALL dbcsr_add(rho_ao(ispin)%matrix, matrix_p_mp2(ispin)%matrix, 1.0_dp, -1.0_dp)
-         END DO
-         CALL qs_rho_update_rho(rho, qs_env=qs_env)
-         CALL qs_ks_did_change(ks_env, rho_changed=.TRUE.)
 
          ! deallocate mp2_W
          CALL dbcsr_deallocate_matrix_set(matrix_w_mp2)
@@ -383,6 +372,9 @@ CONTAINS
 
       ! Energy_correction
       CALL energy_correction(qs_env, ec_init=.FALSE., calculate_forces=.TRUE.)
+
+      ! Excited state forces
+      CALL excited_state_energy(qs_env, calculate_forces=.TRUE.)
 
       ! replicate forces (get current pointer)
       NULLIFY (force)

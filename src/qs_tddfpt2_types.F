@@ -191,6 +191,10 @@ MODULE qs_tddfpt2_types
       TYPE(cp_fm_p_type), DIMENSION(:), POINTER          :: ctransformed
       !S^1/2
       TYPE(dbcsr_type), POINTER                          :: shalf
+      !Eigenvalues/eigenvectors of the overlap matrix, used in sTDA forces (Lowdin derivatives)
+      REAL(KIND=dp), DIMENSION(:), POINTER               :: S_eigenvalues
+      TYPE(cp_fm_type), POINTER                          :: S_eigenvectors
+      TYPE(cp_fm_type), POINTER                          :: slambda
       !Ewald environments
       TYPE(ewald_environment_type), POINTER              :: ewald_env
       TYPE(ewald_pw_type), POINTER                       :: ewald_pw
@@ -222,7 +226,6 @@ MODULE qs_tddfpt2_types
       REAL(kind=dp)                                      :: alpha, beta
       !> flags for finite differences/analytic XC kernels
       LOGICAL                                            :: deriv2_analytic
-      LOGICAL                                            :: deriv3_analytic
    END TYPE full_kernel_env_type
 ! **************************************************************************************************
 !> \brief Type to hold environments for the different kernels
@@ -244,17 +247,19 @@ CONTAINS
 !> \param nstates        number of excited states to converge
 !> \param do_hfx         flag that requested to allocate work matrices required for computation
 !>                       of exact-exchange terms
+!> \param do_admm ...
 !> \param qs_env         Quickstep environment
 !> \param sub_env        parallel group environment
 !> \par History
 !>    * 02.2017 created [Sergey Chulkov]
 ! **************************************************************************************************
-   SUBROUTINE tddfpt_create_work_matrices(work_matrices, gs_mos, nstates, do_hfx, qs_env, sub_env)
+   SUBROUTINE tddfpt_create_work_matrices(work_matrices, gs_mos, nstates, do_hfx, do_admm, &
+                                          qs_env, sub_env)
       TYPE(tddfpt_work_matrices), INTENT(out)            :: work_matrices
       TYPE(tddfpt_ground_state_mos), DIMENSION(:), &
          INTENT(in)                                      :: gs_mos
       INTEGER, INTENT(in)                                :: nstates
-      LOGICAL, INTENT(in)                                :: do_hfx
+      LOGICAL, INTENT(in)                                :: do_hfx, do_admm
       TYPE(qs_environment_type), POINTER                 :: qs_env
       TYPE(tddfpt_subgroup_env_type), INTENT(in)         :: sub_env
 
@@ -263,7 +268,6 @@ CONTAINS
       INTEGER                                            :: handle, igroup, ispin, istate, nao, &
                                                             nao_aux, ngroups, nspins
       INTEGER, DIMENSION(maxspins)                       :: nmo_occ, nmo_virt
-      LOGICAL                                            :: do_admm
       TYPE(cp_blacs_env_type), POINTER                   :: blacs_env
       TYPE(cp_fm_struct_p_type), DIMENSION(maxspins)     :: fm_struct_evects
       TYPE(cp_fm_struct_type), POINTER                   :: fm_struct
@@ -283,6 +287,9 @@ CONTAINS
       NULLIFY (work_matrices%ewald_pw)
       NULLIFY (work_matrices%gamma_exchange)
       NULLIFY (work_matrices%ctransformed)
+      NULLIFY (work_matrices%S_eigenvalues)
+      NULLIFY (work_matrices%S_eigenvectors)
+      NULLIFY (work_matrices%slambda)
 
       nspins = SIZE(gs_mos)
       CALL get_qs_env(qs_env, blacs_env=blacs_env, matrix_s=matrix_s)
@@ -293,8 +300,9 @@ CONTAINS
          nmo_virt(ispin) = SIZE(gs_mos(ispin)%evals_virt)
       END DO
 
-      do_admm = do_hfx .AND. ASSOCIATED(sub_env%admm_A)
       IF (do_admm) THEN
+         CPASSERT(do_hfx)
+         CPASSERT(ASSOCIATED(sub_env%admm_A))
          CALL get_qs_env(qs_env, matrix_s_aux_fit=matrix_s_aux_fit)
          CALL dbcsr_get_info(matrix_s_aux_fit(1)%matrix, nfullrows_total=nao_aux)
       END IF
@@ -570,6 +578,13 @@ CONTAINS
       NULLIFY (work_matrices%shalf)
       CALL dbcsr_init_p(work_matrices%shalf)
       CALL dbcsr_create(work_matrices%shalf, template=matrix_s(1)%matrix)
+      ! forces
+      ALLOCATE (work_matrices%S_eigenvalues(nao))
+      NULLIFY (fm_struct)
+      CALL cp_fm_struct_create(fm_struct, nrow_global=nao, ncol_global=nao, context=blacs_env)
+      CALL cp_fm_create(work_matrices%S_eigenvectors, fm_struct)
+      CALL cp_fm_create(work_matrices%slambda, fm_struct)
+      CALL cp_fm_struct_release(fm_struct)
 
       DO ispin = nspins, 1, -1
          CALL cp_fm_struct_release(fm_struct_evects(ispin)%struct)
@@ -686,6 +701,13 @@ CONTAINS
          NULLIFY (work_matrices%ctransformed)
       ENDIF
       CALL dbcsr_release_p(work_matrices%shalf)
+      !
+      IF (ASSOCIATED(work_matrices%S_eigenvectors)) &
+         CALL cp_fm_release(work_matrices%S_eigenvectors)
+      IF (ASSOCIATED(work_matrices%slambda)) &
+         CALL cp_fm_release(work_matrices%slambda)
+      IF (ASSOCIATED(work_matrices%S_eigenvalues)) &
+         DEALLOCATE (work_matrices%S_eigenvalues)
       ! Ewald
       CALL ewald_env_release(work_matrices%ewald_env)
       CALL ewald_pw_release(work_matrices%ewald_pw)
@@ -793,7 +815,6 @@ CONTAINS
 
       ! finite differences
       kernel_env%deriv2_analytic = section_get_lval(xc_section, "2ND_DERIV_ANALYTICAL")
-      kernel_env%deriv3_analytic = section_get_lval(xc_section, "3RD_DERIV_ANALYTICAL")
 
       CALL timestop(handle)
 

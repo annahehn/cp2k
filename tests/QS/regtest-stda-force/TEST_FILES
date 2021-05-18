@@ -1,0 +1,16 @@
+# runs are executed in the same order as in this file
+# the second field tells which test should be run in order to compare with the last available output
+# e.g. 0 means do not compare anything, running is enough
+#      1 compares the last total energy in the file
+#      for details see cp2k/tools/do_regtest
+#
+h2o_f01.inp                                                 1    1.0E-12             -17.08141281589648
+h2o_f02.inp                                                 1    1.0E-12             -17.12401586901904
+h2o_f03.inp                                                 1    1.0E-12             -17.00233746706061
+h2o_f04.inp                                                 1    1.0E-12             -17.08075107776246
+h2o_f05.inp                                                 1    1.0E-12             -17.24607922754482
+h2o_f06.inp                                                 1    1.0E-12             -17.24607922769755
+h2o_f07.inp                                                 1    1.0E-12             -17.23825558597479
+h2o_f08a.inp                                                1    1.0E-12             -17.23033252463928
+h2o_f08b.inp                                                1    1.0E-12             -17.23189731416613
+#EOF

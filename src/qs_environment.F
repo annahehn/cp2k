@@ -81,6 +81,8 @@ MODULE qs_environment
    USE ewald_pw_types,                  ONLY: ewald_pw_create,&
                                               ewald_pw_release,&
                                               ewald_pw_type
+   USE exstates_types,                  ONLY: excited_energy_type,&
+                                              exstate_create
    USE external_potential_types,        ONLY: get_potential,&
                                               init_potential,&
                                               set_potential
@@ -266,6 +268,7 @@ CONTAINS
       TYPE(cp_blacs_env_type), POINTER                   :: blacs_env
       TYPE(dft_control_type), POINTER                    :: dft_control
       TYPE(energy_correction_type), POINTER              :: ec_env
+      TYPE(excited_energy_type), POINTER                 :: exstate_env
       TYPE(kpoint_type), POINTER                         :: kpoints
       TYPE(lri_environment_type), POINTER                :: lri_env
       TYPE(particle_type), DIMENSION(:), POINTER         :: particle_set
@@ -447,6 +450,13 @@ CONTAINS
       NULLIFY (ec_env)
       CALL ec_env_create(qs_env, ec_env, dft_section)
       CALL set_qs_env(qs_env, ec_env=ec_env)
+
+      dft_section => section_vals_get_subs_vals(qs_env%input, "DFT")
+      CALL section_vals_val_get(dft_section, "EXCITED_STATES%_SECTION_PARAMETERS_", &
+                                l_val=qs_env%excited_state)
+      NULLIFY (exstate_env)
+      CALL exstate_create(exstate_env, qs_env%excited_state, dft_section)
+      CALL set_qs_env(qs_env, exstate_env=exstate_env)
 
       et_coupling_section => section_vals_get_subs_vals(qs_env%input, &
                                                         "PROPERTIES%ET_COUPLING")
