@@ -197,8 +197,6 @@ CONTAINS
       TYPE(xtb_atom_type), POINTER                       :: xtb_atom_a, xtb_atom_b
       TYPE(xtb_control_type), POINTER                    :: xtb_control
 
-!, na1
-
       CALL timeset(routineN, handle)
 
       NULLIFY (logger, virial, atprop)
@@ -874,10 +872,16 @@ CONTAINS
          CALL nonbonded_correction(enonbonded, force, qs_env, xtb_control, sab_xtb_nonbond, &
                                    atomic_kind_set, calculate_forces, use_virial, virial, atprop, atom_of_kind)
       ENDIF
-      ! set repulsive energy
       erep = erep + exb + enonbonded
-      IF (xb_inter) energy%xtb_xb_inter = exb
-      IF (do_nonbonded) energy%xtb_nonbonded = enonbonded
+      ! set repulsive energy
+      IF (xb_inter) THEN
+         CALL mp_sum(exb, para_env%group)
+         energy%xtb_xb_inter = exb
+      ENDIF
+      IF (do_nonbonded) THEN
+         CALL mp_sum(enonbonded, para_env%group)
+         energy%xtb_nonbonded = enonbonded
+      ENDIF
       CALL mp_sum(erep, para_env%group)
       energy%repulsive = erep
 
@@ -1318,8 +1322,6 @@ CONTAINS
       TYPE(pair_potential_pp_type), POINTER              :: potparm
       TYPE(pair_potential_single_type), POINTER          :: pot
       TYPE(section_vals_type), POINTER                   :: nonbonded_section
-
-!
 
       CALL timeset(routineN, handle)
 

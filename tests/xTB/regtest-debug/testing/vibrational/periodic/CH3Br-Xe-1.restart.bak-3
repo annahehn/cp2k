@@ -1,0 +1,78 @@
+ # Version information for this restart file 
+ # current date 2021-05-21 13:52:32.205
+ # current working dir /data/ahehn/xTB/cp2k_annahehn_xtb_workdir/tests/xTB/regtest-debug/testing/vibrational/periodic
+ # Program compiled at                             Tue May 18 14:39:01 CEST 2021
+ # Program compiled on                                                   tcopt11
+ # Program compiled for                                                    local
+ # Source code revision number                                       git:6a2a929
+ &GLOBAL
+   PRINT_LEVEL  LOW
+   PROJECT_NAME CH3Br-Xe
+   RUN_TYPE  GEO_OPT
+ &END GLOBAL
+ &FORCE_EVAL
+   METHOD  QS
+   &DFT
+     &SCF
+       MAX_SCF  100
+       EPS_SCF     1.0000000000000001E-05
+       SCF_GUESS  RESTART
+       &OT  T
+         MINIMIZER  DIIS
+         PRECONDITIONER  FULL_S_INVERSE
+       &END OT
+       &OUTER_SCF  T
+         EPS_SCF     1.0000000000000001E-05
+         MAX_SCF  900
+       &END OUTER_SCF
+     &END SCF
+     &QS
+       EPS_DEFAULT     1.0000000000000000E-10
+       EPS_PGF_ORB     9.9999999999999995E-21
+       METHOD  XTB
+       &XTB
+         DO_EWALD  F
+         DO_NONBONDED  T
+         CHECK_ATOMIC_CHARGES  F
+         &NONBONDED
+           &GENPOT
+             ATOMS Br Xe
+             FUNCTION Aparam*exp(-Bparam*r)-Cparam/r**8
+             VARIABLES r
+             PARAMETERS Aparam Bparam Cparam
+             VALUES     4.9506999999999998E+01    1.4410000000000001E+00    6.7031920000000000E+03
+           &END GENPOT
+         &END NONBONDED
+       &END XTB
+     &END QS
+   &END DFT
+   &SUBSYS
+     &CELL
+       A     1.0000000000000002E+01    0.0000000000000000E+00    0.0000000000000000E+00
+       B     0.0000000000000000E+00    1.0000000000000002E+01    0.0000000000000000E+00
+       C     0.0000000000000000E+00    0.0000000000000000E+00    1.0000000000000002E+01
+       PERIODIC  XYZ
+       MULTIPLE_UNIT_CELL  1 1 1
+     &END CELL
+     &COORD
+C    4.7396555581253379E+00    2.6345014434747078E+00    4.9999999625456590E+00
+H    5.7658473368257512E+00    2.2820514299678818E+00    4.9999999076477595E+00
+H    4.2265716564699138E+00    2.2820177070018803E+00    5.8887017312126746E+00
+H    4.2265716560669224E+00    2.2820179784065768E+00    4.1112980848929173E+00
+Br    4.7396098678516525E+00    4.5861192725362629E+00    5.0000002693540306E+00
+Xe    4.7396309246331665E+00    8.8170650491294218E+00    5.0000000443469590E+00
+     &END COORD
+     &TOPOLOGY
+       NUMBER_OF_ATOMS  6
+       MULTIPLE_UNIT_CELL  1 1 1
+       &CENTER_COORDINATES  T
+       &END CENTER_COORDINATES
+     &END TOPOLOGY
+   &END SUBSYS
+ &END FORCE_EVAL
+ &VIBRATIONAL_ANALYSIS
+   FULLY_PERIODIC  T
+   INTENSITIES  F
+   THERMOCHEMISTRY  T
+   TC_TEMPERATURE     4.5000000000000000E+02
+ &END VIBRATIONAL_ANALYSIS

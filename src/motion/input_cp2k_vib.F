@@ -118,6 +118,12 @@ CONTAINS
       CALL section_add_keyword(section, keyword)
       CALL keyword_release(keyword)
 
+      CALL keyword_create(keyword, __LOCATION__, name="NEGLECT_IMAGFREQ", &
+                          description="Neglect small imaginary frequencies when calculating thermochemistry data. ", &
+                          default_l_val=.FALSE., lone_keyword_l_val=.TRUE.)
+      CALL section_add_keyword(section, keyword)
+      CALL keyword_release(keyword)
+
       CALL keyword_create(keyword, __LOCATION__, name="TC_TEMPERATURE", &
                           description="Temperature for the calculation of the thermochemical data ", &
                           usage="tc_temperature 325.0", default_r_val=cp_unit_to_cp2k(value=273.150_dp, unit_str="K"), &

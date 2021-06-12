@@ -112,6 +112,7 @@ CONTAINS
          output_unit, output_unit_eig, prep, print_grrm, print_scine, proc_dist_type
       INTEGER, DIMENSION(:), POINTER                     :: Clist, Mlist
       LOGICAL                                            :: calc_intens, calc_thchdata, &
+                                                            neglect_imagfreq,&
                                                             do_mode_tracking, keep_rotations, &
                                                             row_force, something_frozen
       REAL(KIND=dp)                                      :: dx, inertia(3), minimum_energy, norm, &
@@ -160,6 +161,7 @@ CONTAINS
       CALL section_vals_val_get(vib_section, "FULLY_PERIODIC", l_val=keep_rotations)
       CALL section_vals_val_get(vib_section, "INTENSITIES", l_val=calc_intens)
       CALL section_vals_val_get(vib_section, "THERMOCHEMISTRY", l_val=calc_thchdata)
+      CALL section_vals_val_get(vib_section, "NEGLECT_IMAGFREQ", l_val=neglect_imagfreq)
       CALL section_vals_val_get(vib_section, "TC_TEMPERATURE", r_val=tc_temp)
       CALL section_vals_val_get(vib_section, "TC_PRESSURE", r_val=tc_press)
       tc_temp = tc_temp*kelvin
@@ -511,7 +513,8 @@ CONTAINS
                   CALL vib_out(iw, nvib, D, konst, rmass, H_eigval2, particles, Mlist, intensities)
                END IF
                IF (.NOT. something_frozen .AND. calc_thchdata) THEN
-                  CALL get_thch_values(H_eigval2, iw, mass, nvib, inertia, 1, minimum_energy, tc_temp, tc_press)
+                  CALL get_thch_values(H_eigval2, iw, mass, nvib, inertia, 1, minimum_energy, tc_temp, tc_press,&
+                                       neglect_imagfreq)
                ENDIF
                CALL write_vibrations_molden(input, particles, H_eigval2, D, intensities, calc_intens, &
                                             dump_only_positive=.FALSE., logger=logger, list=Mlist)
@@ -783,7 +786,8 @@ CONTAINS
 !> \author MI 10:2015
 ! **************************************************************************************************
 
-   SUBROUTINE get_thch_values(freqs, iw, mass, nvib, inertia, spin, totene, temp, pressure)
+   SUBROUTINE get_thch_values(freqs, iw, mass, nvib, inertia, spin, totene, temp, pressure,&
+                              neglect_imagfreq)
 
       REAL(KIND=dp), DIMENSION(:)                        :: freqs
       INTEGER, INTENT(IN)                                :: iw
@@ -792,6 +796,7 @@ CONTAINS
       REAL(KIND=dp), INTENT(IN)                          :: inertia(3)
       INTEGER, INTENT(IN)                                :: spin
       REAL(KIND=dp), INTENT(IN)                          :: totene, temp, pressure
+      LOGICAL, INTENT(IN)                                :: neglect_imagfreq
 
       INTEGER                                            :: i, natoms, sym_num
       REAL(KIND=dp) :: el_entropy, entropy, exp_min_one, fact, fact2, freq_arg, freq_arg2, &
@@ -800,9 +805,35 @@ CONTAINS
          tran_enthalpy, tran_entropy, tran_part_func, vib_cv, vib_energy, vib_entropy, &
          vib_part_func, zpe
       REAL(KIND=dp), ALLOCATABLE, DIMENSION(:)           :: mass_kg
+      LOGICAL                                            :: imagfreq
+      INTEGER                                            :: jimag, jj
+      REAL(KIND=dp)                                      :: maximagfreq
 
 !    temp = 273.150_dp ! in Kelvin
 !    pressure = 101325.0_dp ! in Pascal
+     IF (neglect_imagfreq) THEN 
+      jimag=0
+      imagfreq=.FALSE.
+      maximagfreq=0.0_dp
+      DO i = 1, nvib
+      IF (freqs(i) .le. 0.0d0) THEN
+       imagfreq=.TRUE.
+       jimag=jimag+1
+       IF (ABS(freqs(i)) .ge. maximagfreq) maximagfreq=freqs(i)
+      ENDIF
+      ENDDO
+    !  WRITE(*,*) "maximagfreq", maximagfreq
+      IF ((ABS(maximagfreq)).gt.(50_dp)) THEN
+        CPWARN("Option NEGLECT_IMAGINARY set, but imag. freqs larger then 50 wavenumbers!") 
+      ENDIF
+       DO jj=1,jimag
+         IF (iw > 0) THEN
+            WRITE (UNIT=iw, FMT=*) "Changed freq. no.", jj,"with", freqs(jj),"to ABS(", ABS(maximagfreq),")"
+         ENDIF 
+         freqs(jj) = ABS(maximagfreq) !ABS(freqs(jj))
+       ENDDO  
+     ENDIF
+
 
       freqsum = 0.0_dp
       DO i = 1, nvib
