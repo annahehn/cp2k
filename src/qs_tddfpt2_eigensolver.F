@@ -379,7 +379,7 @@ CONTAINS
          ELSE IF (tddfpt_control%kernel == tddfpt_kernel_stda) THEN
             ! sTDA kernel
             CALL stda_kernel(Aop_evects, evects, is_rks_triplets, qs_env, tddfpt_control%stda_control, &
-                             kernel_env%stda_kernel, sub_env, work_matrices)
+                             kernel_env%stda_kernel, sub_env, work_matrices, gs_mos)
          ELSE IF (tddfpt_control%kernel == tddfpt_kernel_none) THEN
             ! No kernel
             DO ivect = 1, nvects

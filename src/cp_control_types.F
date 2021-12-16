@@ -421,6 +421,13 @@ MODULE cp_control_types
    TYPE stda_control_type
       LOGICAL                                :: do_ewald
       LOGICAL                                :: do_exchange
+      LOGICAL                                :: diag_shift
+      LOGICAL                                :: diag_shift_orig
+      LOGICAL                                :: shift_output
+      REAL(KIND=dp)                          :: diag_shift_delta
+      REAL(KIND=dp)                          :: diag_shift_sigma
+      REAL(KIND=dp)                          :: diag_os_shift_delta
+      REAL(KIND=dp)                          :: diag_os_shift_sigma
       REAL(KIND=dp)                          :: hfx_fraction
       REAL(KIND=dp)                          :: eps_td_filter
       REAL(KIND=dp)                          :: mn_alpha

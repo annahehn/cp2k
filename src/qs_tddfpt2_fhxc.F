@@ -56,7 +56,8 @@ MODULE qs_tddfpt2_fhxc
    USE qs_tddfpt2_stda_types,           ONLY: stda_env_type
    USE qs_tddfpt2_stda_utils,           ONLY: stda_calculate_kernel
    USE qs_tddfpt2_subgroups,            ONLY: tddfpt_subgroup_env_type
-   USE qs_tddfpt2_types,                ONLY: tddfpt_work_matrices
+   USE qs_tddfpt2_types,                ONLY: tddfpt_ground_state_mos,&
+                                              tddfpt_work_matrices
    USE qs_vxc_atom,                     ONLY: calculate_xc_2nd_deriv_atom
    USE task_list_types,                 ONLY: task_list_type
 #include "./base/base_uses.f90"
@@ -473,12 +474,13 @@ CONTAINS
 !> \param stda_env ...
 !> \param sub_env               parallel (sub)group environment
 !> \param work_matrices         collection of work matrices (modified on exit)
+!> \param gs_mos ...
 !> \par History
 !>    * 04.2019 initial version [JHU]
 ! **************************************************************************************************
    SUBROUTINE stda_kernel(Aop_evects, evects, is_rks_triplets, &
                           qs_env, stda_control, stda_env, &
-                          sub_env, work_matrices)
+                          sub_env, work_matrices, gs_mos)
 
       TYPE(cp_fm_p_type), DIMENSION(:, :)                :: Aop_evects, evects
       LOGICAL, INTENT(in)                                :: is_rks_triplets
@@ -487,6 +489,8 @@ CONTAINS
       TYPE(stda_env_type)                                :: stda_env
       TYPE(tddfpt_subgroup_env_type)                     :: sub_env
       TYPE(tddfpt_work_matrices), INTENT(inout)          :: work_matrices
+      TYPE(tddfpt_ground_state_mos), DIMENSION(:), &
+         INTENT(in)                                      :: gs_mos
 
       CHARACTER(LEN=*), PARAMETER                        :: routineN = 'stda_kernel'
 
@@ -501,14 +505,14 @@ CONTAINS
             IF (ASSOCIATED(work_matrices%evects_sub(1, ivect)%matrix)) THEN
                CALL stda_calculate_kernel(qs_env, stda_control, stda_env, sub_env, work_matrices, &
                                           is_rks_triplets, work_matrices%evects_sub(:, ivect), &
-                                          work_matrices%Aop_evects_sub(:, ivect))
+                                          work_matrices%Aop_evects_sub(:, ivect), gs_mos, ivect)
             ELSE
                ! skip trial vectors which are assigned to different parallel groups
                CYCLE
             END IF
          ELSE
             CALL stda_calculate_kernel(qs_env, stda_control, stda_env, sub_env, work_matrices, &
-                                       is_rks_triplets, evects(:, ivect), Aop_evects(:, ivect))
+                                       is_rks_triplets, evects(:, ivect), Aop_evects(:, ivect), gs_mos, ivect)
          END IF
       END DO
 

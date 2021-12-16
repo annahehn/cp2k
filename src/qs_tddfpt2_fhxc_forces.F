@@ -1133,8 +1133,9 @@ CONTAINS
       INTEGER, ALLOCATABLE, DIMENSION(:)                 :: atom_of_kind, first_sgf, kind_of, &
                                                             last_sgf
       INTEGER, DIMENSION(2)                              :: nactive, nlim
-      LOGICAL                                            :: calculate_forces, do_coulomb, do_ewald, &
-                                                            found, is_rks_triplets, use_virial
+      LOGICAL                                            :: calculate_forces, diagshift, do_coulomb, &
+                                                            do_ewald, found, is_rks_triplets, &
+                                                            use_virial
       REAL(KIND=dp)                                      :: alpha, bp, dgabr, dr, eta, fdim, gabr, &
                                                             hfx, rbeta, spinfac, xfac
       REAL(KIND=dp), ALLOCATABLE, DIMENSION(:)           :: tcharge, tv
@@ -1205,6 +1206,9 @@ CONTAINS
       END IF
       do_ewald = stda_control%do_ewald
 
+      diagshift = stda_control%diag_shift_orig
+      IF (diagshift) CPABORT("Forces for K shift not yet implemented")
+
       CALL get_qs_env(qs_env, para_env=para_env, force=force)
 
       CALL get_qs_env(qs_env, natom=natom, cell=cell, &
@@ -1262,7 +1266,6 @@ CONTAINS
             DO jspin = 1, nspins
                ctjspin => work%ctransformed(jspin)%matrix
                xt => xtransformed(jspin)%matrix
-               CALL cp_fm_get_info(ctjspin, matrix_struct=fmstructjspin)
                CALL cp_fm_get_info(ctjspin, matrix_struct=fmstructjspin, nrow_global=nsgf)
                CALL cp_fm_create(cvecjspin, fmstructjspin)
                ! CV(mu,j) = CT(mu,j)*XT(mu,j)

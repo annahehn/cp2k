@@ -1646,6 +1646,9 @@ CONTAINS
    SUBROUTINE create_stda_section(section)
       TYPE(section_type), POINTER                        :: section
 
+      CHARACTER(len=*), PARAMETER :: routineN = 'create_stda_section', &
+         routineP = moduleN//':'//routineN
+
       TYPE(keyword_type), POINTER                        :: keyword
 
       CPASSERT(.NOT. ASSOCIATED(section))
@@ -1673,6 +1676,54 @@ CONTAINS
       CALL keyword_create(keyword, __LOCATION__, name="DO_EWALD", &
                           description="Use Ewald type method for Coulomb interaction", &
                           usage="DO_EWALD", default_l_val=.FALSE., lone_keyword_l_val=.TRUE.)
+      CALL section_add_keyword(section, keyword)
+      CALL keyword_release(keyword)
+
+      CALL keyword_create(keyword, __LOCATION__, name="DIAG_SHIFT", &
+                          description="Shift 1-center integrals to correct for monopole approximation errors,"// &
+                          "recommended when combining sTDA with xTB.", &
+                          usage="DIAG_SHIFT", default_l_val=.FALSE., lone_keyword_l_val=.TRUE.)
+      CALL section_add_keyword(section, keyword)
+      CALL keyword_release(keyword)
+
+      CALL keyword_create(keyword, __LOCATION__, name="DIAG_SHIFT_ORIG", &
+                          description="Shift 1-center integrals to correct for monopole approximation errors,"// &
+                          "based on Grimme formula using virtual orbitals.", &
+                          usage="DIAG_SHIFT_ORIG", default_l_val=.FALSE., lone_keyword_l_val=.TRUE.)
+      CALL section_add_keyword(section, keyword)
+      CALL keyword_release(keyword)
+
+      CALL keyword_create(keyword, __LOCATION__, name="SHIFT_OUTPUT", &
+                          description="Print detailed output for sTDA. Requires virtual orbitals,", &
+                          usage="SHIFT_OUTPUT", default_l_val=.FALSE., lone_keyword_l_val=.TRUE.)
+      CALL section_add_keyword(section, keyword)
+      CALL keyword_release(keyword)
+
+      CALL keyword_create(keyword, __LOCATION__, name="DIAG_SHIFT_DELTA", &
+                          description="Empirical parameter to shift xTB-sTDA 1-center integrals to correct "// &
+                          "for monopole approximation errors, in eV.", &
+                          usage="DIAG_SHIFT_DELTA 0.0", default_r_val=0.0_dp)
+      CALL section_add_keyword(section, keyword)
+      CALL keyword_release(keyword)
+
+      CALL keyword_create(keyword, __LOCATION__, name="DIAG_SHIFT_SIGMA", &
+                          description="Empirical parameter to shift xTB-sTDA 1-center integrals to correct "// &
+                          "for monopole approximation errors, in eV.", &
+                          usage="DIAG_SHIFT_SIGMA 0.0", default_r_val=0.0_dp)
+      CALL section_add_keyword(section, keyword)
+      CALL keyword_release(keyword)
+
+      CALL keyword_create(keyword, __LOCATION__, name="DIAG_OS_SHIFT_DELTA", &
+                          description="Empirical parameter to shift xTB-sTDA 1-center integrals to correct "// &
+                          "for monopole approximation errors, in eV.", &
+                          usage="DIAG_OS_SHIFT_DELTA 0.0", default_r_val=0.0_dp)
+      CALL section_add_keyword(section, keyword)
+      CALL keyword_release(keyword)
+
+      CALL keyword_create(keyword, __LOCATION__, name="DIAG_OS_SHIFT_SIGMA", &
+                          description="Empirical parameter to shift xTB-sTDA 1-center integrals to correct "// &
+                          "for monopole approximation errors, in eV.", &
+                          usage="DIAG_OS_SHIFT_SIGMA 0.0", default_r_val=0.0_dp)
       CALL section_add_keyword(section, keyword)
       CALL keyword_release(keyword)
 

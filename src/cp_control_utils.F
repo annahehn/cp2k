@@ -1270,9 +1270,12 @@ CONTAINS
          DIMENSION(:), POINTER                           :: tmpstringlist
       INTEGER                                            :: handle, irep, isize, nrep
       INTEGER, ALLOCATABLE, DIMENSION(:)                 :: inds
-      LOGICAL                                            :: do_ewald, do_exchange, expl, explicit, &
-                                                            multigrid_set
-      REAL(KIND=dp)                                      :: filter, fval, hfx
+      LOGICAL                                            :: diag_shift, diag_shift_orig, do_ewald, &
+                                                            do_exchange, expl, explicit, &
+                                                            multigrid_set, shift_output
+      REAL(KIND=dp)                                      :: diag_os_shift_delta, &
+                                                            diag_os_shift_sigma, diag_shift_delta, &
+                                                            diag_shift_sigma, filter, fval, hfx
       TYPE(section_vals_type), POINTER                   :: dipole_section, mgrid_section, &
                                                             stda_section, xc_func, xc_section
 
@@ -1446,6 +1449,14 @@ CONTAINS
          CASE DEFAULT
             CPABORT("Illegal value for periodiciy")
          END SELECT
+         t_control%stda_control%do_ewald = .FALSE.
+         t_control%stda_control%diag_shift = .FALSE.
+         t_control%stda_control%diag_shift_orig = .FALSE.
+         t_control%stda_control%shift_output = .FALSE.
+         t_control%stda_control%diag_shift_delta = 0.0_dp
+         t_control%stda_control%diag_shift_sigma = 0.0_dp
+         t_control%stda_control%diag_os_shift_delta = 0.0_dp
+         t_control%stda_control%diag_os_shift_sigma = 0.0_dp
       END IF
       CALL section_vals_get(stda_section, explicit=explicit)
       IF (explicit) THEN
@@ -1465,6 +1476,24 @@ CONTAINS
          t_control%stda_control%coulomb_sr_cut = fval
          CALL section_vals_val_get(stda_section, "COULOMB_SR_EPS", r_val=fval)
          t_control%stda_control%coulomb_sr_eps = fval
+         CALL section_vals_val_get(stda_section, "DIAG_SHIFT", l_val=diag_shift, explicit=expl)
+         IF (expl) t_control%stda_control%diag_shift = diag_shift
+         CALL section_vals_val_get(stda_section, "DIAG_SHIFT_ORIG", l_val=diag_shift_orig, explicit=expl)
+         IF (expl) t_control%stda_control%diag_shift_orig = diag_shift_orig
+         CALL section_vals_val_get(stda_section, "SHIFT_OUTPUT", l_val=shift_output, explicit=expl)
+         IF (expl) t_control%stda_control%shift_output = shift_output
+         CALL section_vals_val_get(stda_section, "DIAG_SHIFT_DELTA", r_val=diag_shift_delta, &
+                                   explicit=expl)
+         IF (expl) t_control%stda_control%diag_shift_delta = diag_shift_delta
+         CALL section_vals_val_get(stda_section, "DIAG_SHIFT_SIGMA", r_val=diag_shift_sigma, &
+                                   explicit=expl)
+         IF (expl) t_control%stda_control%diag_shift_sigma = diag_shift_sigma
+         CALL section_vals_val_get(stda_section, "DIAG_OS_SHIFT_DELTA", r_val=diag_os_shift_delta, &
+                                   explicit=expl)
+         IF (expl) t_control%stda_control%diag_os_shift_delta = diag_os_shift_delta
+         CALL section_vals_val_get(stda_section, "DIAG_OS_SHIFT_SIGMA", r_val=diag_os_shift_sigma, &
+                                   explicit=expl)
+         IF (expl) t_control%stda_control%diag_os_shift_sigma = diag_os_shift_sigma
       END IF
 
       CALL timestop(handle)

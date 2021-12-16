@@ -109,9 +109,10 @@ CONTAINS
       CHARACTER(LEN=*), PARAMETER                        :: routineN = 'tddfpt_init_mos'
 
       INTEGER                                            :: handle, ispin, nmo_avail, nmo_occ, &
-                                                            nmo_virt, nspins
+                                                            nmo_virt, nspins, iounit
       INTEGER, DIMENSION(2, 2)                           :: moc, mvt
       LOGICAL                                            :: print_virtuals_newtonx
+      LOGICAL                                            :: diag_shift_orig
       REAL(kind=dp), DIMENSION(:), POINTER               :: evals_virt_spin
       TYPE(cell_type), POINTER                           :: cell
       TYPE(cp_1d_r_p_type), DIMENSION(:), POINTER        :: evals_virt
@@ -140,13 +141,16 @@ CONTAINS
       print_section => section_vals_get_subs_vals(qs_env%input, "PROPERTIES%TDDFPT%PRINT")
       CALL section_vals_val_get(print_section, "NAMD_PRINT%PRINT_VIRTUALS", l_val=print_virtuals_newtonx)
 
+      diag_shift_orig = tddfpt_control%stda_control%diag_shift_orig
+
       ! when the number of unoccupied orbitals is limited and OT has been used
       ! for the ground-state DFT calculation,
       ! compute the missing unoccupied orbitals using OT as well.
       NULLIFY (evals_virt, evals_virt_spin, mos_virt, mos_virt_spin)
       IF (ASSOCIATED(scf_env)) THEN
          IF ((scf_env%method == ot_method_nr .AND. tddfpt_control%nlumo > 0) .OR. &
-             (scf_env%method == ot_method_nr .AND. print_virtuals_newtonx)) THEN
+             (scf_env%method == ot_method_nr .AND. print_virtuals_newtonx) .OR. &
+             (scf_env%method == ot_method_nr .AND. diag_shift_orig)) THEN
             ! As OT with ADDED_MOS/=0 is currently not implemented, the following block is equivalent to:
             ! nmo_virt = tddfpt_control%nlumo
             ! number of already computed unoccupied orbitals (added_mos) .
@@ -157,7 +161,7 @@ CONTAINS
             END DO
             ! number of unoccupied orbitals to compute
             nmo_virt = tddfpt_control%nlumo - nmo_virt
-            IF (.NOT. print_virtuals_newtonx) THEN
+            IF ((.NOT. print_virtuals_newtonx) .AND. (.NOT. diag_shift_orig)) THEN
                IF (nmo_virt > 0) THEN
                   ALLOCATE (evals_virt(nspins), mos_virt(nspins))
                   ! the number of actually computed unoccupied orbitals will be stored as 'nmo_avail'

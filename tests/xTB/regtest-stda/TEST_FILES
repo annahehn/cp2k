@@ -6,4 +6,6 @@
 #
 water_xTB.inp                                              37    2.0E-05               0.125917E+00
 water_xTB_2.inp                                            37    2.0E-05               0.186821E+00
+water_xtB_stda_kshift_2.inp                                37    1.0E-05               0.355657E+01 
+water_xtB_stda_kshift.inp                                  37    1.0E-05               0.355659E+01
 #EOF
