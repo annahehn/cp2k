@@ -26,4 +26,31 @@ H2O_GAPW_XC_2.inp                                     37    4.0E-06             
 H2O_GAPW_XC_3.inp                                     37    4.0E-06                   0.836577E+00
 H2O_GAPW_1_triplet.inp                                37    4.0E-06                   0.505991E+00
 Ne_GAPW_triplet.inp                                   37    4.0E-06                   0.168075E+01
+H2_HF_GAPW_comp_orca_sing_trip.inp                   105    4.0E-04                   505.943249 
+# Ref Orca Singlet   - Triplet    vs.  CP2K Singlet   - Triplet
+#          11.806 eV -  6.338 eV  |   11.77642         6.38311  
+#          21.483 eV - 16.827 eV  |   21.59102        16.95111
+#          27.783 eV - 22.895 eV  |   27.84251        23.04337
+#          42.483 eV - 36.791 eV  |   42.47241        36.77595
+#          42.483 eV - 36.791 eV  |   42.47241        36.77595
+H2_PBE_GAPW_comp_orca_sing_trip.inp                  105    4.0E-04                   505.768946
+#     Orca Singlet   - Triplet    vs.  CP2K Singlet   - Triplet
+#          11.806 eV -  7.133 eV  |   11.81017         7.29638
+#          21.230 eV - 17.555 eV  |   21.32892        17.88891
+#          27.087 eV - 22.249 eV  |   27.12847        22.74910
+#          41.341 eV - 36.377 eV  |   41.68757        36.38718
+#          41.341 eV - 36.377 eV  |   41.68757        36.38718
+# H2_PBE_GPW_comp_orca_sing_trip.inp 
+# CP2K computation without pseudopotential, but choosing very large grids
+#                                     11.81377         7.18199
+#                                     21.37381        17.60141
+#                                     27.14432        22.30801
+#                                     41.68888        36.41727
+#                                     41.68888        36.41727
+Ne_GAPW_PP_sing_trip.inp                             105    4.0E-04                   148.052044
+#                                     19.12147        18.30152
+#                                     19.12147        18.30152
+#Ne_GPW_PP_sing_trip.inp - only when choosing superlarge grids the correct triplet excitation energies are obtained
+#                                     19.12039        18.32749
+#                                     19.12039        18.32749
 #EOF
