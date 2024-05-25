@@ -57,7 +57,8 @@ case "${with_openmpi}" in
       fi
       if [ $(command -v srun) ]; then
         echo "Slurm installation found. OpenMPI will be configured with --with-pmi."
-        EXTRA_CONFIGURE_FLAGS="--with-pmi"
+      #### CHANGED ANNA ####  EXTRA_CONFIGURE_FLAGS="--with-pmi"
+        EXTRA_CONFIGURE_FLAGS=""
       else
         EXTRA_CONFIGURE_FLAGS=""
       fi
