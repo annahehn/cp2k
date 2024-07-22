@@ -15,7 +15,9 @@ MODULE qs_tddfpt2_eigensolver
    USE cp_fm_basic_linalg,              ONLY: cp_fm_contracted_trace,&
                                               cp_fm_scale,&
                                               cp_fm_scale_and_add,&
-                                              cp_fm_trace
+                                              cp_fm_trace, &
+                                              cp_fm_row_scale, &
+                                              cp_fm_column_scale
    USE cp_fm_diag,                      ONLY: choose_eigv_solver
    USE cp_fm_pool_types,                ONLY: fm_pool_create_fm,&
                                               fm_pool_give_back_fm
@@ -24,7 +26,8 @@ MODULE qs_tddfpt2_eigensolver
                                               cp_fm_struct_type
    USE cp_fm_types,                     ONLY: &
         cp_fm_copy_general, cp_fm_create, cp_fm_get_info, cp_fm_get_submatrix, cp_fm_maxabsval, &
-        cp_fm_release, cp_fm_set_all, cp_fm_set_submatrix, cp_fm_to_fm, cp_fm_type
+        cp_fm_release, cp_fm_set_all, cp_fm_set_submatrix, cp_fm_to_fm, cp_fm_type, &
+        cp_fm_write_formatted
    USE cp_log_handling,                 ONLY: cp_logger_type
    USE cp_output_handling,              ONLY: cp_iterate
    USE input_constants,                 ONLY: tddfpt_kernel_full,&
@@ -54,7 +57,13 @@ MODULE qs_tddfpt2_eigensolver
    USE qs_tddfpt2_subgroups,            ONLY: tddfpt_subgroup_env_type
    USE qs_tddfpt2_types,                ONLY: tddfpt_ground_state_mos,&
                                               tddfpt_work_matrices
-   USE qs_tddfpt2_utils,                ONLY: tddfpt_total_number_of_states
+   USE qs_tddfpt2_utils,                ONLY: tddfpt_total_number_of_states, add_smearing_aterm, &
+                                              compute_fermib
+   USE qs_mo_types,                     ONLY: mo_set_type, get_mo_set
+   USE cp_log_handling,                 ONLY: cp_get_default_logger,&
+                                              cp_logger_get_default_io_unit,&
+                                              cp_logger_type
+   USE cp_blacs_env,                    ONLY: cp_blacs_env_type
 #include "./base/base_uses.f90"
 
    IMPLICIT NONE
@@ -91,21 +100,53 @@ CONTAINS
 !>        new Krylov's vectors seem to be random and should be orthogonalised even with respect to
 !>        the occupied MOs.
 ! **************************************************************************************************
-   SUBROUTINE tddfpt_orthogonalize_psi1_psi0(evects, S_C0_C0T)
+   SUBROUTINE tddfpt_orthogonalize_psi1_psi0(evects, S_C0_C0T, qs_env, gs_mos, evals, &
+                                             tddfpt_control, S_C0)
       TYPE(cp_fm_type), DIMENSION(:, :), INTENT(in)      :: evects
       TYPE(cp_fm_type), DIMENSION(:), INTENT(in)         :: S_C0_C0T
+      TYPE(cp_fm_type), DIMENSION(:), INTENT(in)         :: S_C0
+      TYPE(qs_environment_type), POINTER                 :: qs_env
+      TYPE(tddfpt_ground_state_mos), DIMENSION(:), &
+         INTENT(in)                                      :: gs_mos
+      REAL(kind=dp), DIMENSION(:), intent(in)            :: evals
+
+      TYPE(tddfpt2_control_type), POINTER, intent(in)    :: tddfpt_control
 
       CHARACTER(LEN=*), PARAMETER :: routineN = 'tddfpt_orthogonalize_psi1_psi0'
 
       INTEGER                                            :: handle, ispin, ivect, nactive, nao, &
-                                                            nspins, nvects
-      TYPE(cp_fm_struct_type), POINTER                   :: matrix_struct
+                                                            nspins, nvects, iocc !, jocc
+      TYPE(cp_fm_struct_type), POINTER                   ::  matrix_struct, matrix_struct_tmp
       TYPE(cp_fm_type)                                   :: evortho
+      TYPE(cp_fm_type)                                   :: betaSCC
+      TYPE(cp_fm_type)                                   :: Cvec
+      TYPE(cp_fm_type)                                   :: subevectsfm, subevectsresultfm
+      TYPE(mo_set_type), DIMENSION(:), POINTER           :: mos
+      TYPE(cp_fm_type), POINTER                          :: mo_coeff
+      REAL(kind=dp), DIMENSION(:), POINTER               :: occup
+      REAL(kind=dp), DIMENSION(:), ALLOCATABLE           :: bscale
+      REAL(kind=dp), DIMENSION(:,:), ALLOCATABLE         :: evortholocal, subevects, subevectsresult
+      INTEGER                                            :: iounit !, ibas,jbas
+      TYPE(cp_logger_type), POINTER                      :: logger
+  !    REAL(KIND=dp), CONTIGUOUS, DIMENSION(:, :), &
+  !       POINTER                                         :: local_data, local_data2
+      TYPE(mp_para_env_type), POINTER                    :: para_env
+      TYPE(cp_blacs_env_type), POINTER                   :: blacs_env_global
+
 
       CALL timeset(routineN, handle)
 
       nspins = SIZE(evects, 1)
       nvects = SIZE(evects, 2)
+
+      NULLIFY (logger)
+      logger => cp_get_default_logger()
+      iounit = cp_logger_get_default_io_unit(logger)
+
+      IF (tddfpt_control%do_smearing) THEN
+          NULLIFY(mos)
+          CALL get_qs_env(qs_env,mos=mos)
+      ENDIF
 
       IF (nvects > 0) THEN
          DO ispin = 1, nspins
@@ -113,10 +154,122 @@ CONTAINS
                                 nrow_global=nao, ncol_global=nactive)
             CALL cp_fm_create(evortho, matrix_struct)
             DO ivect = 1, nvects
-               ! evortho: C0 * C0^T * S * C1 == (S * C0 * C0^T)^T * C1
-               CALL parallel_gemm('T', 'N', nao, nactive, nao, 1.0_dp, S_C0_C0T(ispin), &
-                                  evects(ispin, ivect), 0.0_dp, evortho)
-               CALL cp_fm_scale_and_add(1.0_dp, evects(ispin, ivect), -1.0_dp, evortho)
+               IF (.not.tddfpt_control%do_smearing) THEN
+                ! evortho: C0 * C0^T * S * C1 == (S * C0 * C0^T)^T * C1
+                  CALL parallel_gemm('T', 'N', nao, nactive, nao, 1.0_dp, S_C0_C0T(ispin), &
+                                     evects(ispin, ivect), 0.0_dp, evortho)
+                  CALL cp_fm_scale_and_add(1.0_dp, evects(ispin, ivect), -1.0_dp, evortho)
+               ELSE
+                  NULLIFY(occup)
+                  CALL get_mo_set(mos(ispin),occupation_numbers=occup, mo_coeff=mo_coeff)
+
+                  CALL compute_fermib(qs_env, gs_mos, evals(ivect))
+
+                 ! recompute SCC to contract with fermib
+                  NULLIFY(para_env) 
+                  CALL cp_fm_get_info(evects(1, 1), para_env=para_env, context=blacs_env_global)
+
+                  NULLIFY(matrix_struct, matrix_struct_tmp)
+                  CALL cp_fm_get_info(matrix=evects(ispin, 1), matrix_struct=matrix_struct_tmp)
+                  CALL cp_fm_struct_create(matrix_struct,nrow_global=nao, &
+                                  ncol_global=nao, template_fmstruct=matrix_struct_tmp)
+                  CALL cp_fm_create(betaSCC, matrix_struct)
+                  CALL cp_fm_struct_release(fmstruct=matrix_struct)
+
+                  NULLIFY(matrix_struct)
+                  CALL cp_fm_get_info(matrix=gs_mos(ispin)%mos_occ,matrix_struct=matrix_struct)
+                  CALL cp_fm_create(Cvec,matrix_struct)
+
+                  ALLOCATE(evortholocal(nao,nactive))
+                  ALLOCATE(bscale(nactive))
+
+             !     DO iocc=1,nactive
+             !      CALL cp_fm_to_fm(gs_mos(ispin)%mos_occ,Cvec)
+             !      bscale(:)=gs_mos(ispin)%fermib(iocc,:)
+             !      CALL cp_fm_column_scale(Cvec,bscale)
+             !     ! DO jocc=1,nactive
+             !     !  IF (iounit>0) WRITE(iounit,"(A,F14.5)") "bscale", bscale(jocc)
+             !     ! ENDDO
+
+             !      CALL parallel_gemm('N', 'T', nao, nao, nactive,1.0_dp, Cvec, &
+             !                         S_C0(ispin), 0.0_dp, betaSCC)
+
+             !      CALL cp_fm_get_info(evects(ispin,ivect),local_data=local_data)
+             !      CALL cp_fm_get_info(betaSCC,local_data=local_data2)
+             !      evortholocal=0.0_dp
+             !      DO ibas=1,nao
+             !        evortholocal(ibas,iocc) = local_data(ibas,iocc)*occup(iocc)
+             !        DO jbas=1,nao
+             !           evortholocal(ibas,iocc) = evortholocal(ibas,iocc) + local_data2(ibas,jbas)*local_data(jbas,iocc)
+             !        ENDDO
+             !      ENDDO
+             !      IF (iounit>0) THEN
+             !       CALL cp_fm_get_info(evects(ispin,ivect),local_data=local_data)
+             !          DO ibas=1,nao
+             !           WRITE(iounit,"(A,F14.5)") "evortholocal(ibas,1)", evortholocal(ibas,iocc) 
+             !          ! WRITE(iounit,"(A,F14.5)")  "evects(ibas,1)", local_data(ibas,iocc) 
+             !          ! WRITE(iounit,"(A,F14.5)")  "local_data2(ibas,1)", local_data2(ibas,iocc)
+             !          ENDDO
+             !      ENDIF
+             !   ENDDO ! iocc
+
+                  DO iocc=1,nactive
+                   CALL cp_fm_to_fm(gs_mos(ispin)%mos_occ,Cvec)
+                   bscale(:)=gs_mos(ispin)%fermib(iocc,:)
+                   CALL cp_fm_column_scale(Cvec,bscale)
+
+                   CALL parallel_gemm('N', 'T', nao, nao, nactive,1.0_dp, Cvec, &
+                                      S_C0(ispin), 0.0_dp, betaSCC)
+
+               !! get ith column of X
+                    NULLIFY(matrix_struct)
+                    CALL cp_fm_struct_create(matrix_struct,nrow_global=nao, &
+                                  ncol_global=1, template_fmstruct=matrix_struct_tmp)
+                    CALL cp_fm_create(subevectsfm, matrix_struct)
+                    CALL cp_fm_create(subevectsresultfm, matrix_struct)
+                    CALL cp_fm_struct_release(fmstruct=matrix_struct)
+
+                    ALLOCATE(subevects(nao,1))
+                    ALLOCATE(subevectsresult(nao,1))
+                    CALL cp_fm_get_submatrix(fm=evects(ispin,ivect), target_m=subevects, &
+                                  start_row=((iocc - 1)*nao + 1), start_col=1, &
+                                  n_rows=nao, n_cols=1)
+                    CALL cp_fm_set_submatrix(subevectsfm, subevects)
+                    CALL parallel_gemm('N', 'N', nao, 1, nao,1.0_dp, betaSCC, & 
+                                       subevectsfm, 0.0_dp, subevectsresultfm)
+                    CALL cp_fm_get_submatrix(subevectsresultfm, subevectsresult)
+                    CALL cp_fm_set_submatrix(evortho, subevectsresult, &
+                                  start_row=((iocc - 1)*nao + 1), start_col=1, &
+                                  n_rows=nao, n_cols=1)
+                    DEALLOCATE(subevects, subevectsresult)
+                !   IF (iounit>0) THEN
+                !    CALL cp_fm_get_info(betaSCC,local_data=local_data2)
+                !       DO ibas=1,nao
+                !        WRITE(iounit,"(A,F14.5)") "betaSCC(ibas,1)", local_data2(ibas,iocc)
+                !      ENDDO
+                !   ENDIF
+                  ENDDO ! iocc
+                  CALL cp_fm_column_scale(evects(ispin,ivect),occup)
+                  CALL cp_fm_scale_and_add(1.0_dp, evects(ispin, ivect), -1.0_dp, evortho)
+
+                !   IF (iounit>0) THEN
+                !    CALL cp_fm_get_info(evects(ispin,ivect),local_data=local_data)
+                !      DO iocc=1,nactive
+                !       DO ibas=1,nao
+                !        WRITE(iounit,"(A,F14.5)")  "evects(ibas,1)", local_data(ibas,iocc) 
+                !       ENDDO
+                !      ENDDO
+                !   ENDIF
+
+                   DEALLOCATE(bscale)
+                   DEALLOCATE(evortholocal)
+
+                  CALL cp_fm_release(subevectsfm)
+                  CALL cp_fm_release(subevectsresultfm)
+                  CALL cp_fm_release(betaSCC)
+                  CALL cp_fm_release(Cvec)
+               
+               ENDIF
             END DO
             CALL cp_fm_release(evortho)
          END DO
@@ -418,6 +571,12 @@ CONTAINS
          ! orbital energy difference term
          CALL tddfpt_apply_energy_diff(Aop_evects=Aop_evects, evects=evects, S_evects=S_evects, &
                                        gs_mos=gs_mos, matrix_ks=matrix_ks)
+          
+         ! if smeared occupation, then add aCCSX here
+         IF (tddfpt_control%do_smearing) THEN    
+           CALL add_smearing_aterm(Aop_evects=Aop_evects, evects=evects, S_evects=S_evects, &
+                                   gs_mos=gs_mos)
+         ENDIF
 
          IF (do_hfx) THEN
             IF (tddfpt_control%kernel == tddfpt_kernel_full) THEN
@@ -846,9 +1005,10 @@ CONTAINS
                                                evals=evals_last(1:nvects_new), &
                                                ritz_vects=evects(:, 1:nvects_new), Aop_ritz=Aop_ritz(:, 1:nvects_new), &
                                                gs_mos=gs_mos, matrix_s=matrix_s(1)%matrix)
-
+ 
             CALL tddfpt_orthogonalize_psi1_psi0(krylov_vects(:, nvects_exist + 1:nvects_exist + nvects_new), &
-                                                work_matrices%S_C0_C0T)
+                                                work_matrices%S_C0_C0T, qs_env, &
+                                                gs_mos,evals(1:nstates),tddfpt_control,work_matrices%S_C0)
 
             CALL tddfpt_orthonormalize_psi1_psi1(krylov_vects(:, 1:nvects_exist + nvects_new), nvects_new, &
                                                  S_krylov(:, 1:nvects_exist + nvects_new), matrix_s(1)%matrix)
@@ -889,7 +1049,9 @@ CONTAINS
          ! nvects_new == 0 if iter >= tddfpt_control%niters
          IF (nvects_new == 0 .OR. is_nonortho) THEN
             ! restart Davidson iterations
-            CALL tddfpt_orthogonalize_psi1_psi0(evects, work_matrices%S_C0_C0T)
+            CALL tddfpt_orthogonalize_psi1_psi0(evects, work_matrices%S_C0_C0T,qs_env, &
+                                                gs_mos,&
+                                             evals(1:nstates),tddfpt_control,work_matrices%S_C0)
             CALL tddfpt_orthonormalize_psi1_psi1(evects, nstates, S_evects, matrix_s(1)%matrix)
 
             EXIT

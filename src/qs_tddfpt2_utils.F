@@ -21,7 +21,9 @@ MODULE qs_tddfpt2_utils
                                               cp_dbcsr_plus_fm_fm_t,&
                                               cp_dbcsr_sm_fm_multiply,&
                                               dbcsr_allocate_matrix_set
-   USE cp_fm_basic_linalg,              ONLY: cp_fm_triangular_invert
+   USE cp_fm_basic_linalg,              ONLY: cp_fm_column_scale,&
+                                              cp_fm_scale_and_add,&
+                                              cp_fm_triangular_invert
    USE cp_fm_cholesky,                  ONLY: cp_fm_cholesky_decompose
    USE cp_fm_struct,                    ONLY: cp_fm_struct_create,&
                                               cp_fm_struct_p_type,&
@@ -37,9 +39,10 @@ MODULE qs_tddfpt2_utils
    USE cp_log_handling,                 ONLY: cp_get_default_logger,&
                                               cp_logger_get_default_io_unit,&
                                               cp_logger_type
+   USE fermi_utils,                     ONLY: Fermi
    USE input_constants,                 ONLY: &
         cholesky_dbcsr, cholesky_inverse, cholesky_off, cholesky_restore, oe_gllb, oe_lb, oe_none, &
-        oe_saop, oe_shift
+        oe_saop, oe_shift, smear_fermi_dirac
    USE input_section_types,             ONLY: section_vals_create,&
                                               section_vals_get,&
                                               section_vals_get_subs_vals,&
@@ -66,6 +69,8 @@ MODULE qs_tddfpt2_utils
    USE qs_scf_types,                    ONLY: ot_method_nr,&
                                               qs_scf_env_type
    USE qs_tddfpt2_types,                ONLY: tddfpt_ground_state_mos
+   USE scf_control_types,               ONLY: scf_control_type,&
+                                              smear_type
    USE util,                            ONLY: sort
    USE xc_pot_saop,                     ONLY: add_saop_pot
    USE xtb_matrices,                    ONLY: build_xtb_ks_matrix
@@ -84,9 +89,8 @@ MODULE qs_tddfpt2_utils
 
    PUBLIC :: tddfpt_init_ground_state_mos, tddfpt_release_ground_state_mos
    PUBLIC :: tddfpt_guess_vectors, tddfpt_init_mos, tddfpt_oecorr
-   PUBLIC :: tddfpt_total_number_of_states
-
-! **************************************************************************************************
+   PUBLIC :: tddfpt_total_number_of_states, tddfpt_smeared_occupation, &
+             add_smearing_aterm, compute_fermib
 
 CONTAINS
 
@@ -1061,5 +1065,366 @@ CONTAINS
       CALL timestop(handle)
 
    END SUBROUTINE tddfpt_guess_vectors
+! **************************************************************************************************
+!> \brief ...
+!> \param qs_env ...
+!> \param gs_mos ...
+!> \param log_unit ...
+! **************************************************************************************************
+   SUBROUTINE tddfpt_smeared_occupation(qs_env, gs_mos, log_unit)
+
+      TYPE(qs_environment_type), POINTER                 :: qs_env
+      TYPE(tddfpt_ground_state_mos), DIMENSION(:), &
+         INTENT(IN), POINTER                             :: gs_mos
+      INTEGER, INTENT(in)                                :: log_unit
+
+      CHARACTER(len=*), PARAMETER :: routineN = 'tddfpt_smeared_occupation'
+
+      INTEGER                                            :: handle, ispin, nspins
+      INTEGER, ALLOCATABLE, DIMENSION(:)                 :: nocc, nvirt
+      REAL(kind=dp), DIMENSION(:), POINTER               :: mo_evals, occup
+      TYPE(mo_set_type), DIMENSION(:), POINTER           :: mos
+      TYPE(scf_control_type), POINTER                    :: scf_control
+      TYPE(smear_type), POINTER                          :: smear
+
+!, iocc
+
+      CALL timeset(routineN, handle)
+
+      nspins = SIZE(gs_mos)
+
+      NULLIFY (mos, scf_control)
+      CALL get_qs_env(qs_env, mos=mos, scf_control=scf_control)
+      NULLIFY (smear)
+      IF (ASSOCIATED(qs_env%scf_control%smear)) THEN
+         smear => qs_env%scf_control%smear
+      ELSE
+         CPABORT("Smeared input section no longer associated.")
+      END IF
+
+      ! IF (log_unit>0) THEN
+      !      WRITE(log_unit,"(A,L8)")"use_ot", scf_control%use_ot
+      !      WRITE(log_unit,'(A,L8)') "scf_control%smear%do_smear", scf_control%smear%do_smear
+      !      WRITE(log_unit,'(A,F14.5)') "Smearing temperature", scf_control%smear%electronic_temperature
+      !      WRITE(log_unit,'(A,F14.5)') "Smearing temperature", smear%electronic_temperature
+      !  ENDIF
+
+      NULLIFY (mo_evals, occup)
+      ALLOCATE (nocc(nspins), nvirt(nspins))
+      DO ispin = 1, nspins
+         CALL get_mo_set(mos(ispin), eigenvalues=mo_evals, occupation_numbers=occup)
+         CALL cp_fm_get_info(gs_mos(ispin)%mos_occ, ncol_global=nocc(ispin))
+         CALL cp_fm_get_info(gs_mos(ispin)%mos_virt, ncol_global=nvirt(ispin))
+         !  IF (log_unit>0) THEN
+         !    do iocc=1,nocc(ispin)
+         !     WRITE(log_unit,'(A,F14.5)') "Occupation numbers", occup(iocc)
+         !    enddo
+         !    WRITE(log_unit,'(A,I8)') "Occupied MOs", nocc(ispin)
+         !    WRITE(log_unit,'(A,I8)') "Virtual MOs", nvirt(ispin)
+         !  ENDIF
+      END DO
+
+      ! allocate fermia
+      CALL allocate_fermi_params(gs_mos)
+      ! compute fermia
+      CALL compute_fermia(qs_env, gs_mos, log_unit)
+
+      CALL timestop(handle)
+
+   END SUBROUTINE tddfpt_smeared_occupation
+! **************************************************************************************************
+!> \brief ...
+!> \param qs_env ...
+!> \param gs_mos ...
+!> \param log_unit ...
+! **************************************************************************************************
+   SUBROUTINE compute_fermia(qs_env, gs_mos, log_unit)
+
+      TYPE(qs_environment_type), POINTER                 :: qs_env
+      TYPE(tddfpt_ground_state_mos), DIMENSION(:), &
+         INTENT(IN), POINTER                             :: gs_mos
+      INTEGER, INTENT(IN)                                :: log_unit
+
+      CHARACTER(len=*), PARAMETER                        :: routineN = 'compute_fermia'
+
+      INTEGER                                            :: handle, iocc, ispin, nspins
+      INTEGER, ALLOCATABLE, DIMENSION(:)                 :: nocc
+      REAL(kind=dp)                                      :: maxvalue, mu
+      REAL(kind=dp), DIMENSION(:), POINTER               :: fermia, mo_evals, occup
+      TYPE(dft_control_type), POINTER                    :: dft_control
+      TYPE(mo_set_type), DIMENSION(:), POINTER           :: mos
+      TYPE(scf_control_type), POINTER                    :: scf_control
+      TYPE(smear_type), POINTER                          :: smear
+      TYPE(tddfpt2_control_type), POINTER                :: tddfpt_control
+
+      CALL timeset(routineN, handle)
+
+      NULLIFY (mos, dft_control, tddfpt_control, scf_control)
+      CALL get_qs_env(qs_env, dft_control=dft_control, scf_control=scf_control)
+      tddfpt_control => dft_control%tddfpt2_control
+
+      CALL get_qs_env(qs_env, mos=mos)
+      nspins = SIZE(mos)
+
+      NULLIFY (smear)
+      IF (ASSOCIATED(qs_env%scf_control%smear)) THEN
+         smear => qs_env%scf_control%smear
+      ELSE
+         CPABORT("Smeared input section no longer associated.")
+      END IF
+
+      !   IF (log_unit>0) THEN
+      !       WRITE(log_unit,'(A,F14.5)') "Smearing temperature", smear%electronic_temperature
+      !   ENDIF
+
+      NULLIFY (mo_evals, occup)
+      ALLOCATE (nocc(nspins))
+      DO ispin = 1, nspins
+         CALL get_mo_set(mos(ispin), eigenvalues=mo_evals, occupation_numbers=occup, mu=mu)
+         CALL cp_fm_get_info(gs_mos(ispin)%mos_occ, ncol_global=nocc(ispin))
+         IF (log_unit > 0) THEN
+            !  do iocc=1,nocc(ispin)
+            !   WRITE(log_unit,'(A,F14.5)') "Occupation numbers", occup(iocc)
+            !  enddo
+            !   WRITE(log_unit,'(A,F14.5)') "Fermi energy", mu
+         END IF
+      END DO
+
+      DO ispin = 1, nspins
+         fermia => gs_mos(ispin)%fermia
+         DO iocc = 1, nocc(ispin)
+            maxvalue = mu + 3.0_dp*smear%electronic_temperature - mo_evals(iocc)
+            !   IF (log_unit>0) THEN
+            !     WRITE(log_unit,'(A,F10.5)') "maxval", maxvalue
+            !   ENDIF
+
+            fermia(iocc) = MAX(0.0_dp, maxvalue)
+            !    IF (log_unit>0) THEN
+            !      WRITE(log_unit,'(A,F14.5)') "Fermi smearing parameter alpha", fermia(iocc)
+            !    ENDIF
+         END DO
+      END DO
+
+      CALL timestop(handle)
+   END SUBROUTINE compute_fermia
+! **************************************************************************************************
+!> \brief ...
+!> \param Aop_evects ...
+!> \param evects ...
+!> \param S_evects ...
+!> \param gs_mos ...
+! **************************************************************************************************
+   SUBROUTINE add_smearing_aterm(Aop_evects, evects, S_evects, gs_mos)
+
+      TYPE(cp_fm_type), DIMENSION(:, :), INTENT(in)      :: Aop_evects, evects, S_evects
+      TYPE(tddfpt_ground_state_mos), DIMENSION(:), &
+         INTENT(IN)                                      :: gs_mos
+
+      CHARACTER(len=*), PARAMETER :: routineN = 'add_smearing_aterm'
+
+      INTEGER                                            :: handle, ispin, ivect, nactive, nao, &
+                                                            nspins, nvects
+      TYPE(cp_fm_struct_type), POINTER                   :: matrix_struct, matrix_struct_tmp
+      TYPE(cp_fm_type)                                   :: CCSXvec, CSXvec, Cvec
+
+      !     INTEGER                                            :: iounit, ibas
+      !   TYPE(cp_logger_type), POINTER                      :: logger
+      !  REAL(KIND=dp), CONTIGUOUS, DIMENSION(:, :), &
+      !    POINTER                                         :: local_data2
+
+      CALL timeset(routineN, handle)
+
+      !  NULLIFY (logger)
+      !   logger => cp_get_default_logger()
+      !   iounit = cp_logger_get_default_io_unit(logger)
+
+      nspins = SIZE(evects, 1)
+      nvects = SIZE(evects, 2)
+
+      DO ispin = 1, nspins
+         CALL cp_fm_get_info(matrix=evects(ispin, 1), matrix_struct=matrix_struct, &
+                             nrow_global=nao, ncol_global=nactive)
+         CALL cp_fm_create(CCSXvec, matrix_struct)
+         CALL cp_fm_create(Cvec, matrix_struct)
+
+         NULLIFY (matrix_struct_tmp)
+         CALL cp_fm_struct_create(matrix_struct_tmp, nrow_global=nactive, &
+                                  ncol_global=nactive, template_fmstruct=matrix_struct)
+         CALL cp_fm_create(CSXvec, matrix_struct_tmp)
+         CALL cp_fm_struct_release(fmstruct=matrix_struct_tmp)
+
+         DO ivect = 1, nvects
+            CALL parallel_gemm('T', 'N', nactive, nactive, nao, 1.0_dp, &
+                               gs_mos(ispin)%mos_occ, S_evects(ispin, ivect), &
+                               0.0_dp, CSXvec)
+            CALL cp_fm_to_fm(gs_mos(ispin)%mos_occ, Cvec)
+
+            !      CALL cp_fm_get_info(Cvec,local_data=local_data2)
+            !      IF (iounit>0) THEN
+            !                 DO ibas=1,nao
+            !                  WRITE(iounit,"(A,F14.5)")  "local_data2 in fermia(ibas,1)", local_data2(ibas,1)
+            !                 ENDDO
+            !             ENDIF
+
+            CALL cp_fm_column_scale(Cvec, gs_mos(ispin)%fermia)
+            CALL parallel_gemm('N', 'N', nao, nactive, nactive, 1.0_dp, &
+                               Cvec, CSXvec, 0.0_dp, CCSXvec)
+
+            ! alpha C C S X
+            CALL cp_fm_scale_and_add(1.0_dp, Aop_evects(ispin, ivect), 1.0_dp, CCSXvec)
+         END DO
+         CALL cp_fm_release(CCSXvec)
+         CALL cp_fm_release(CSXvec)
+         CALL cp_fm_release(Cvec)
+      END DO
+
+      CALL timestop(handle)
+   END SUBROUTINE add_smearing_aterm
+! **************************************************************************************************
+!> \brief ...
+!> \param qs_env ...
+!> \param gs_mos ...
+!> \param evals ...
+! **************************************************************************************************
+   SUBROUTINE compute_fermib(qs_env, gs_mos, evals)
+
+      TYPE(qs_environment_type), POINTER                 :: qs_env
+      TYPE(tddfpt_ground_state_mos), DIMENSION(:), &
+         INTENT(IN)                                      :: gs_mos
+      REAL(kind=dp), INTENT(in)                          :: evals
+
+      CHARACTER(len=*), PARAMETER                        :: routineN = 'compute_fermib'
+
+      INTEGER                                            :: handle, iocc, iounit, ispin, jocc, &
+                                                            nactive, nspins
+      REAL(KIND=dp)                                      :: dummykTS, nelec
+      REAL(KIND=dp), ALLOCATABLE, DIMENSION(:, :)        :: interocc, occup_im
+      REAL(kind=dp), DIMENSION(:), POINTER               :: fermia, mo_evals, occup, occuptmp
+      REAL(KIND=dp), DIMENSION(:, :), POINTER            :: fermib
+      TYPE(cp_logger_type), POINTER                      :: logger
+      TYPE(mo_set_type), DIMENSION(:), POINTER           :: mos
+      TYPE(scf_control_type), POINTER                    :: scf_control
+      TYPE(smear_type), POINTER                          :: smear
+
+      CALL timeset(routineN, handle)
+
+      NULLIFY (logger)
+      logger => cp_get_default_logger()
+      iounit = cp_logger_get_default_io_unit(logger)
+
+      NULLIFY (mos, scf_control)
+      CALL get_qs_env(qs_env, mos=mos, scf_control=scf_control)
+      NULLIFY (smear)
+      IF (ASSOCIATED(qs_env%scf_control%smear)) THEN
+         smear => qs_env%scf_control%smear
+      ELSE
+         CPABORT("Smeared input section no longer associated.")
+      END IF
+
+      NULLIFY (fermib, fermia)
+      nspins = SIZE(gs_mos)
+
+      DO ispin = 1, nspins
+
+         fermib => gs_mos(ispin)%fermib
+         fermia => gs_mos(ispin)%fermia
+         fermib = 0.0_dp
+
+         ! get theta_Fi
+         NULLIFY (mo_evals, occup)
+         CALL get_mo_set(mos(ispin), eigenvalues=mo_evals, occupation_numbers=occup)
+         CALL cp_fm_get_info(gs_mos(ispin)%mos_occ, ncol_global=nactive)
+
+         IF (smear%fixed_mag_mom == -1.0_dp) THEN
+            nelec = REAL(mos(ispin)%nelectron, dp)
+         ELSE
+            nelec = mos(ispin)%n_el_f
+         END IF
+
+         ! compute theta_im
+         NULLIFY (occuptmp)
+         CALL get_mo_set(mos(ispin), occupation_numbers=occuptmp)
+         ALLOCATE (occup_im(nactive, nactive), interocc(nactive, nactive))
+
+         DO iocc = 1, nactive
+            IF (smear%method .EQ. smear_fermi_dirac) THEN
+               CALL Fermi(occuptmp, nelec, dummykTS, mos(ispin)%eigenvalues, mos(ispin)%eigenvalues(iocc), &
+                          smear%electronic_temperature, mos(ispin)%maxocc)
+            ELSE
+               CPABORT("TDDFT only works with Fermi-Dirac distribution.")
+            END IF
+            DO jocc = 1, nactive
+               occup_im(iocc, jocc) = occuptmp(jocc)
+            END DO
+         END DO
+
+         ! compute fermib
+         DO iocc = 1, nactive
+            DO jocc = 1, nactive
+               interocc(iocc, jocc) = (occup(iocc) - occup(jocc))/(mo_evals(iocc) - mo_evals(jocc) - evals)
+               fermib(iocc, jocc) = fermib(iocc, jocc) + occup(iocc)*occup_im(iocc, jocc) &
+                                    + occup(jocc)*occup_im(jocc, iocc) &
+                                    + fermia(jocc)*interocc(iocc, jocc)*occup_im(jocc, iocc)
+            END DO
+         END DO
+
+      !   IF (iounit > 0) THEN
+      !      DO iocc = 1, nactive
+      !         DO jocc = 1, nactive
+      !            WRITE (iounit, '(A,F14.5)') "Fermi smearing parameter beta", fermib(iocc, jocc)
+      !         END DO
+      !      END DO
+      !   END IF
+
+         DEALLOCATE (occup_im)
+         DEALLOCATE (interocc)
+
+      END DO  ! ispin
+
+      CALL timestop(handle)
+   END SUBROUTINE compute_fermib
+! **************************************************************************************************
+!> \brief ...
+!> \param gs_mos ...
+! **************************************************************************************************
+   SUBROUTINE allocate_fermi_params(gs_mos)
+
+      TYPE(tddfpt_ground_state_mos), DIMENSION(:), &
+         INTENT(IN), POINTER                             :: gs_mos
+
+      CHARACTER(len=*), PARAMETER :: routineN = 'allocate_fermi_params'
+
+      INTEGER                                            :: handle, ispin, nocc, nspins
+
+      CALL timeset(routineN, handle)
+
+      nspins = SIZE(gs_mos)
+      DO ispin = 1, nspins
+         CALL cp_fm_get_info(gs_mos(ispin)%mos_occ, ncol_global=nocc)
+         ALLOCATE (gs_mos(ispin)%fermia(nocc))
+         ALLOCATE (gs_mos(ispin)%fermib(nocc, nocc))
+      END DO
+
+      CALL timestop(handle)
+   END SUBROUTINE allocate_fermi_params
+! **************************************************************************************************
+!> \brief ...
+!> \param gs_mos ...
+! **************************************************************************************************
+   SUBROUTINE deallocate_fermi_params(gs_mos)
+      TYPE(tddfpt_ground_state_mos), DIMENSION(:), &
+         INTENT(IN), POINTER                             :: gs_mos
+
+      INTEGER                                            :: ispin
+
+      DO ispin = 1, SIZE(gs_mos)
+         IF (ASSOCIATED(gs_mos(ispin)%fermia)) THEN
+            DEALLOCATE (gs_mos(ispin)%fermia)
+            DEALLOCATE (gs_mos(ispin)%fermib)
+            NULLIFY (gs_mos(ispin)%fermia, gs_mos(ispin)%fermib)
+         END IF
+      END DO
+
+   END SUBROUTINE deallocate_fermi_params
 
 END MODULE qs_tddfpt2_utils

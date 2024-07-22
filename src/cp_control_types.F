@@ -506,6 +506,8 @@ MODULE cp_control_types
       LOGICAL                              :: rks_triplets = .FALSE.
       !> local resolution of identity for Coulomb contribution
       LOGICAL                              :: do_lrigpw = .FALSE.
+      !> smeared occupation
+      LOGICAL                              :: do_smearing = .FALSE.
       ! automatic generation of auxiliary basis for LRI-TDDFT
       INTEGER                              :: auto_basis_p_lri_aux = 1
       !> use symmetric definition of ADMM Kernel correction

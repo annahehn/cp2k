@@ -12,6 +12,9 @@
 ! **************************************************************************************************
 MODULE fermi_utils
 
+   USE cp_log_handling,                 ONLY: cp_get_default_logger,&
+                                              cp_logger_get_default_io_unit,&
+                                              cp_logger_type
    USE kahan_sum,                       ONLY: accurate_sum
    USE kinds,                           ONLY: dp
 #include "base/base_uses.f90"
@@ -51,9 +54,14 @@ CONTAINS
       INTEGER, INTENT(IN), OPTIONAL                      :: estate
       REAL(KIND=dp), INTENT(IN), OPTIONAL                :: festate
 
-      INTEGER                                            :: I, Nstate
+      INTEGER                                            :: I, iounit, Nstate
       REAL(KIND=dp)                                      :: arg, occupation, term1, term2, tmp, &
                                                             tmp2, tmp3, tmp4, tmplog
+      TYPE(cp_logger_type), POINTER                      :: logger
+
+      NULLIFY (logger)
+      logger => cp_get_default_logger()
+      iounit = cp_logger_get_default_io_unit(logger)
 
       Nstate = SIZE(e)
       kTS = 0.0_dp
@@ -70,13 +78,21 @@ CONTAINS
          ELSE
             occupation = maxocc
          END IF
+         !   IF (iounit>0) THEN
+         !      WRITE(iounit,"(A,I8)") "nstate", nstate
+         !      WRITE(iounit,"(A, F14.5)") "occupation", maxocc
+         !   ENDIF
          ! have the result of exp go to zero instead of overflowing
          IF (e(i) > mu) THEN
             arg = -(e(i) - mu)/T
+            !   IF (iounit>0) WRITE(iounit,"(A, F14.5)") "arg", arg
             ! tmp is smaller than 1
             tmp = EXP(arg)
+            !   IF (iounit>0) WRITE(iounit,"(A, F14.5)") "tmp", tmp
             tmp4 = tmp + 1.0_dp
+            !   IF (iounit>0) WRITE(iounit,"(A, F14.5)") "tmp4", tmp4
             tmp2 = tmp/tmp4
+            !   IF (iounit>0) WRITE(iounit,"(A, F14.5)") "tmp2", tmp2
             tmp3 = 1.0_dp/tmp4
             ! log(1+eps), might need to be written more accurately
             tmplog = -LOG(tmp4)
@@ -85,9 +101,16 @@ CONTAINS
          ELSE
             arg = (e(i) - mu)/T
             ! tmp is smaller than 1
+            !   IF (iounit>0) WRITE(iounit,"(A, F14.5)") "e(i)", e(i)
+            !   IF (iounit>0) WRITE(iounit,"(A, F14.5)") "mu", mu
+            !   IF (iounit>0) WRITE(iounit,"(A, F14.5)") "T", T
+            !   IF (iounit>0) WRITE(iounit,"(A, F14.5)") "arg", arg
             tmp = EXP(arg)
+            !   IF (iounit>0) WRITE(iounit,"(A, F14.5)") "tmp", tmp
             tmp4 = tmp + 1.0_dp
+            !   IF (iounit>0) WRITE(iounit,"(A, F14.5)") "tmp4", tmp4
             tmp2 = 1.0_dp/tmp4
+            !   IF (iounit>0) WRITE(iounit,"(A, F14.5)") "tmp2", tmp2
             tmp3 = tmp/tmp4
             tmplog = -LOG(tmp4)
             term1 = tmp2*tmplog
@@ -96,9 +119,16 @@ CONTAINS
 
          f(i) = occupation*tmp2
          kTS = kTS + T*occupation*(term1 + term2)
+         !   IF (iounit>0) THEN
+         !      WRITE(iounit,"(A, F14.5)") "fermi", f(i)
+         !   ENDIF
       END DO
 
       N = accurate_sum(f)
+      !   IF (iounit>0) THEN
+      !     WRITE(iounit,"(A, F14.5)") "N", N
+      !  ENDIF
+      !CPABORT("here")
 
    END SUBROUTINE Fermi
 

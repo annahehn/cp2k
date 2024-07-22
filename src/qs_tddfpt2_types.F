@@ -74,7 +74,7 @@ MODULE qs_tddfpt2_types
    INTEGER, PARAMETER, PRIVATE          :: nderivs = 3
    INTEGER, PARAMETER, PRIVATE          :: maxspins = 2
 
-   PUBLIC :: tddfpt_ground_state_mos, tddfpt_work_matrices
+   PUBLIC :: tddfpt_ground_state_mos, tddfpt_work_matrices !,sternheimer_smear_type
    PUBLIC :: tddfpt_create_work_matrices, stda_create_work_matrices, tddfpt_release_work_matrices
    PUBLIC :: hfxsr_create_work_matrices
 
@@ -100,8 +100,14 @@ MODULE qs_tddfpt2_types
       !> it is mainly needed to make the restart file transferable
       REAL(kind=dp), ALLOCATABLE, DIMENSION(:)           :: phases_occ
       REAL(kind=dp), ALLOCATABLE, DIMENSION(:)           :: phases_virt
+      ! For smeared occupation
+      REAL(KIND=dp), DIMENSION(:), POINTER :: fermia
+      REAL(KIND=dp), DIMENSION(:, :), POINTER :: fermib
+      ! TYPE(sternheimer_smear_type), DIMENSION(:), POINTER :: fermi_params => NULL()
    END TYPE tddfpt_ground_state_mos
-
+! **************************************************************************************************
+   !  TYPE sternheimer_smear_type
+   !  END TYPE sternheimer_smear_type
 ! **************************************************************************************************
 !> \brief Set of temporary ("work") matrices.
 !> \par History

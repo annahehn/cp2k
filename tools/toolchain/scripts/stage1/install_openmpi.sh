@@ -55,6 +55,13 @@ case "${with_openmpi}" in
           CFLAGS="${CFLAGS} -fgnu89-inline"
         fi
       fi
+      if [ $(command -v srun) ]; then
+        echo "Slurm installation found. OpenMPI will be configured with --with-pmi."
+        #       EXTRA_CONFIGURE_FLAGS="--with-pmi"
+        EXTRA_CONFIGURE_FLAGS=""
+      else
+        EXTRA_CONFIGURE_FLAGS=""
+      fi
       # We still require MPI-1.0-compatability for PTSCOTCH
       ./configure CFLAGS="${CFLAGS}" \
         --prefix=${pkg_install_dir} \

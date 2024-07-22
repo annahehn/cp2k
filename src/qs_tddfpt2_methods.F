@@ -105,7 +105,8 @@ MODULE qs_tddfpt2_methods
    USE qs_tddfpt2_utils,                ONLY: tddfpt_guess_vectors,&
                                               tddfpt_init_mos,&
                                               tddfpt_oecorr,&
-                                              tddfpt_release_ground_state_mos
+                                              tddfpt_release_ground_state_mos,&
+                                              tddfpt_smeared_occupation
    USE string_utilities,                ONLY: integer_to_string
    USE xc_write_output,                 ONLY: xc_write
 #include "./base/base_uses.f90"
@@ -238,10 +239,15 @@ CONTAINS
 
       CALL tddfpt_header(log_unit)
       CALL kernel_info(log_unit, dft_control, tddfpt_control, xc_section)
+
       ! obtain occupied and virtual (unoccupied) ground-state Kohn-Sham orbitals
       NULLIFY (gs_mos)
-
       CALL tddfpt_init_mos(qs_env, gs_mos, log_unit)
+
+      ! obtain smeared occupation numbers
+      IF (tddfpt_control%do_smearing) THEN
+         CALL tddfpt_smeared_occupation(qs_env, gs_mos, log_unit)
+      END IF
 
       ! obtain corrected KS-matrix
       CALL tddfpt_oecorr(qs_env, gs_mos, matrix_ks_oep)
@@ -1014,7 +1020,8 @@ CONTAINS
       CALL cp_print_key_finished_output(log_unit, logger, &
                                         tddfpt_print_section, "GUESS_VECTORS")
 
-      CALL tddfpt_orthogonalize_psi1_psi0(evects, work_matrices%S_C0_C0T)
+      CALL tddfpt_orthogonalize_psi1_psi0(evects, work_matrices%S_C0_C0T, qs_env, &
+                                          gs_mos, evals, tddfpt_control, work_matrices%S_C0)
       CALL tddfpt_orthonormalize_psi1_psi1(evects, &
                                            nstates, &
                                            S_evects, &
