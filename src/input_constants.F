@@ -595,7 +595,8 @@ MODULE input_constants
                                                xc_vdw_fun_nonloc = 102
    INTEGER, PARAMETER, PUBLIC               :: vdw_pairpot_dftd2 = 1, &
                                                vdw_pairpot_dftd3 = 2, &
-                                               vdw_pairpot_dftd3bj = 3
+                                               vdw_pairpot_dftd3bj = 3, &
+                                               vdw_pairpot_dftd4 = 4
    INTEGER, PARAMETER, PUBLIC               :: vdw_nl_DRSLL = 1, &
                                                vdw_nl_LMKLL = 2, &
                                                vdw_nl_RVV10 = 3
@@ -1087,7 +1088,10 @@ MODULE input_constants
                                                int_ldos_z = 21, &
                                                int_ldos_none = 22, &
                                                small_cell_full_kp = 31, &
-                                               large_cell_Gamma = 32
+                                               large_cell_Gamma = 32, &
+                                               G0W0 = 35, &
+                                               evGW0 = 36, &
+                                               evGW = 37
 
    ! periodic RESP parameters
    INTEGER, PARAMETER, PUBLIC               :: do_resp_x_dir = 0, &
