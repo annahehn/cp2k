@@ -1434,8 +1434,7 @@ CONTAINS
                           "Mainly intended for things like GAP corrections to DFT "// &
                           "to achieve correlated-wavefunction-like accuracy. "// &
                           "Requires linking with quip library from <http://www.libatoms.org>.", &
-                          citations=(/QUIP_ref/), n_keywords=1, n_subsections=0, repeats=.TRUE., &
-                          deprecation_notice="Support for the QUIP library is slated for removal.")
+                          citations=(/QUIP_ref/), n_keywords=1, n_subsections=0, repeats=.TRUE.)
 
       NULLIFY (keyword)
 

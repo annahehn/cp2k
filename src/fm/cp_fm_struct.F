@@ -131,25 +131,29 @@ CONTAINS
                                   local_leading_dimension, template_fmstruct, square_blocks, force_block)
 
       TYPE(cp_fm_struct_type), POINTER             :: fmstruct
-      TYPE(mp_para_env_type), TARGET, OPTIONAL     :: para_env
+      TYPE(mp_para_env_type), TARGET, OPTIONAL    :: para_env
       INTEGER, INTENT(in), OPTIONAL                :: nrow_global, ncol_global
       INTEGER, INTENT(in), OPTIONAL                :: nrow_block, ncol_block
       INTEGER, INTENT(in), OPTIONAL                :: local_leading_dimension
-      TYPE(cp_blacs_env_type), TARGET, OPTIONAL    :: context
+      TYPE(cp_blacs_env_type), TARGET, OPTIONAL   :: context
       INTEGER, DIMENSION(9), INTENT(in), OPTIONAL  :: descriptor
-      INTEGER, OPTIONAL, DIMENSION(2)              :: first_p_pos
+      INTEGER, OPTIONAL, DIMENSION(2)               :: first_p_pos
       TYPE(cp_fm_struct_type), POINTER, OPTIONAL   :: template_fmstruct
       LOGICAL, OPTIONAL, INTENT(in)                :: square_blocks
       LOGICAL, OPTIONAL, INTENT(in)                :: force_block
 
       INTEGER                                      :: dumblock, i
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       INTEGER                                      :: iunit, stat
       INTEGER, EXTERNAL                            :: numroc
       TYPE(cp_logger_type), POINTER                :: logger
 #endif
 
       LOGICAL :: my_square_blocks, my_force_block
+
+#if defined(__parallel) && ! defined(__SCALAPACK)
+      CPABORT("full matrices need scalapack for parallel runs ")
+#endif
 
       ALLOCATE (fmstruct)
 
@@ -229,7 +233,7 @@ CONTAINS
 
       fmstruct%nrow_locals = 0
       fmstruct%ncol_locals = 0
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       fmstruct%nrow_locals(fmstruct%context%mepos(1)) = &
          numroc(fmstruct%nrow_global, fmstruct%nrow_block, &
                 fmstruct%context%mepos(1), fmstruct%first_p_pos(1), &
@@ -284,7 +288,7 @@ CONTAINS
       ! the max should go away
       ALLOCATE (fmstruct%row_indices(MAX(fmstruct%nrow_locals(fmstruct%context%mepos(1)), 1)))
       DO i = 1, SIZE(fmstruct%row_indices)
-#ifdef __parallel
+#ifdef __SCALAPACK
          fmstruct%row_indices(i) = fmstruct%l2g_row(i, fmstruct%context%mepos(1))
 #else
          fmstruct%row_indices(i) = i
@@ -292,7 +296,7 @@ CONTAINS
       END DO
       ALLOCATE (fmstruct%col_indices(MAX(fmstruct%ncol_locals(fmstruct%context%mepos(2)), 1)))
       DO i = 1, SIZE(fmstruct%col_indices)
-#ifdef __parallel
+#ifdef __SCALAPACK
          fmstruct%col_indices(i) = fmstruct%l2g_col(i, fmstruct%context%mepos(2))
 #else
          fmstruct%col_indices(i) = i
@@ -305,7 +309,7 @@ CONTAINS
          fmstruct%descriptor = descriptor
       ELSE
          fmstruct%descriptor = 0
-#if defined(__parallel)
+#if defined(__SCALAPACK)
          ! local leading dimension needs to be at least 1
          CALL descinit(fmstruct%descriptor, fmstruct%nrow_global, &
                        fmstruct%ncol_global, fmstruct%nrow_block, &
@@ -650,12 +654,12 @@ CONTAINS
       INTEGER, INTENT(IN) :: INDXGLOB
       INTEGER                                  :: G2P
 
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       INTEGER :: number_of_process_rows
       INTEGER, EXTERNAL :: indxg2p
 #endif
 
-#if defined(__parallel)
+#if defined(__SCALAPACK)
 
       CALL struct%context%get(number_of_process_rows=number_of_process_rows)
 
@@ -685,12 +689,12 @@ CONTAINS
       INTEGER, INTENT(IN) :: INDXGLOB
       INTEGER                                  :: G2P
 
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       INTEGER :: number_of_process_columns
       INTEGER, EXTERNAL :: indxg2p
 #endif
 
-#if defined(__parallel)
+#if defined(__SCALAPACK)
 
       CALL struct%context%get(number_of_process_columns=number_of_process_columns)
 
@@ -742,12 +746,12 @@ CONTAINS
       INTEGER, INTENT(IN)                      :: INDXGLOB
       INTEGER                                  :: G2L
 
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       INTEGER :: number_of_process_rows
       INTEGER, EXTERNAL :: indxg2l
 #endif
 
-#if defined(__parallel)
+#if defined(__SCALAPACK)
 
       CALL struct%context%get(number_of_process_rows=number_of_process_rows)
 
@@ -798,12 +802,12 @@ CONTAINS
       INTEGER, INTENT(IN)                      :: INDXGLOB
       INTEGER                                  :: G2L
 
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       INTEGER :: number_of_process_columns
       INTEGER, EXTERNAL :: indxg2l
 #endif
 
-#if defined(__parallel)
+#if defined(__SCALAPACK)
 
       CALL struct%context%get(number_of_process_columns=number_of_process_columns)
 
@@ -856,7 +860,7 @@ CONTAINS
       INTEGER, INTENT(IN)                      :: INDXLOC, IPROC
       INTEGER                                  :: L2G
 
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       INTEGER :: number_of_process_rows
       INTEGER, EXTERNAL :: indxl2g
 
@@ -913,7 +917,7 @@ CONTAINS
       INTEGER, INTENT(IN)                      :: INDXLOC, IPROC
       INTEGER                                  :: L2G
 
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       INTEGER :: number_of_process_columns
       INTEGER, EXTERNAL :: indxl2g
 

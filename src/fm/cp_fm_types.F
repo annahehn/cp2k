@@ -174,6 +174,10 @@ CONTAINS
 
       CALL timeset(routineN, handle)
 
+#if defined(__parallel) && ! defined(__SCALAPACK)
+      CPABORT("full matrices need scalapack for parallel runs")
+#endif
+
       context => matrix_struct%context
       matrix%matrix_struct => matrix_struct
       CALL cp_fm_struct_retain(matrix%matrix_struct)
@@ -568,7 +572,7 @@ CONTAINS
       ! locals
       INTEGER :: i, nrow_global
 
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       INTEGER, DIMENSION(9) :: desca
       TYPE(cp_blacs_env_type), POINTER :: context
       INTEGER :: icol_local, ipcol, iprow, irow_local, mypcol, myprow, npcol, &
@@ -579,7 +583,7 @@ CONTAINS
 
       CALL cp_fm_get_info(matrix, nrow_global=nrow_global)
 
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       diag = 0.0_dp
       context => matrix%matrix_struct%context
       myprow = context%mepos(1)
@@ -642,7 +646,7 @@ CONTAINS
       LOGICAL, INTENT(OUT), OPTIONAL            :: local
 
       ! locals
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       INTEGER, DIMENSION(9) :: desca
       TYPE(cp_blacs_env_type), POINTER :: context
       INTEGER :: icol_local, ipcol, iprow, irow_local, mypcol, myprow, npcol, &
@@ -650,7 +654,7 @@ CONTAINS
       REAL(KIND=dp), DIMENSION(:, :), POINTER :: a
 #endif
 
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       context => matrix%matrix_struct%context
       myprow = context%mepos(1)
       mypcol = context%mepos(2)
@@ -696,7 +700,7 @@ CONTAINS
 
       INTEGER                                  :: mypcol, myprow, npcol, nprow
       TYPE(cp_blacs_env_type), POINTER         :: context
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       INTEGER                                  :: icol_local, ipcol, iprow, &
                                                   irow_local
       INTEGER, DIMENSION(9)                    :: desca
@@ -711,7 +715,7 @@ CONTAINS
 
       CPASSERT(.NOT. matrix%use_sp)
 
-#if defined(__parallel)
+#if defined(__SCALAPACK)
 
       a => matrix%local_data
 
@@ -928,7 +932,7 @@ CONTAINS
       para_env => fm%matrix_struct%para_env
 
       full_block => fm%local_data
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       ! zero-out whole target_m
       IF (SIZE(target_m, 1)*SIZE(target_m, 2) /= 0) THEN
          CALL dcopy(SIZE(target_m, 1)*SIZE(target_m, 2), [0.0_dp], 0, target_m, 1)
@@ -1379,7 +1383,7 @@ CONTAINS
 
       INTEGER                                  :: handle, n, ss, ts
       REAL(KIND=dp), DIMENSION(:, :), POINTER  :: a, b
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       INTEGER                                  :: i
       INTEGER, DIMENSION(9)                    :: desca, descb
 #endif
@@ -1397,7 +1401,7 @@ CONTAINS
       a => msource%local_data
       b => mtarget%local_data
 
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       desca(:) = msource%matrix_struct%descriptor(:)
       descb(:) = mtarget%matrix_struct%descriptor(:)
       DO i = 0, ncol - 1
@@ -1426,7 +1430,7 @@ CONTAINS
 
       INTEGER                                  :: handle, ncol, nrow
       REAL(KIND=dp), DIMENSION(:, :), POINTER  :: a, b
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       INTEGER, DIMENSION(9)                    :: desca, descb
 #endif
 
@@ -1438,7 +1442,7 @@ CONTAINS
       a => msource%local_data
       b => mtarget%local_data
 
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       desca(:) = msource%matrix_struct%descriptor(:)
       descb(:) = mtarget%matrix_struct%descriptor(:)
       CALL pdlacpy(uplo, nrow, ncol, a(1, 1), 1, 1, desca, b(1, 1), 1, 1, descb)
@@ -1473,7 +1477,7 @@ CONTAINS
 
       INTEGER                                  :: handle, i, na, nb, ss, ts
       REAL(KIND=dp), DIMENSION(:, :), POINTER  :: a, b
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       INTEGER, DIMENSION(9)                    :: desca, descb
 #endif
 
@@ -1497,7 +1501,7 @@ CONTAINS
       IF (ncol > nb) &
          CPABORT("cannot copy because nrow > number of rows of target matrix")
 
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       desca(:) = msource%matrix_struct%descriptor(:)
       descb(:) = mtarget%matrix_struct%descriptor(:)
       DO i = 0, ncol - 1
@@ -2004,7 +2008,7 @@ CONTAINS
 
       LOGICAL                                  :: debug
       INTEGER                                  :: handle
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       INTEGER, DIMENSION(9)                    :: desca, descb
       REAL(KIND=dp), DIMENSION(1, 1), TARGET   :: dummy
       REAL(KIND=dp), DIMENSION(:, :), POINTER  :: smat, dmat
@@ -2024,7 +2028,7 @@ CONTAINS
                                  d_firstrow, &
                                  d_firstcol)
       ELSE
-#ifdef __parallel
+#ifdef __SCALAPACK
          NULLIFY (smat, dmat)
          ! check whether source is available on this process
          IF (ASSOCIATED(source%matrix_struct)) THEN
@@ -2096,7 +2100,7 @@ CONTAINS
       INTEGER                                  :: mypcol, myprow, npcol, nprow
       REAL(KIND=dp), DIMENSION(:, :), POINTER  :: a
       TYPE(cp_blacs_env_type), POINTER         :: context
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       INTEGER                                  :: icol_local, ipcol, iprow, &
                                                   irow_local
       INTEGER, DIMENSION(9)                    :: desca
@@ -2112,7 +2116,7 @@ CONTAINS
 
       a => matrix%local_data
 
-#if defined(__parallel)
+#if defined(__SCALAPACK)
 
       desca(:) = matrix%matrix_struct%descriptor(:)
 
@@ -2145,7 +2149,7 @@ CONTAINS
       INTEGER                                  :: handle, j, max_block, &
                                                   ncol_global, nrow_global
       TYPE(mp_para_env_type), POINTER          :: para_env
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       INTEGER                                  :: i, i_block, icol_local, &
                                                   in, info, ipcol, &
                                                   iprow, irow_local, &
@@ -2162,7 +2166,7 @@ CONTAINS
       CALL cp_fm_get_info(fm, nrow_global=nrow_global, ncol_global=ncol_global, ncol_block=max_block, &
                           para_env=para_env)
 
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       num_pe = para_env%num_pe
       mepos = para_env%mepos
       rb = nrow_global
@@ -2251,7 +2255,7 @@ CONTAINS
       INTEGER                                  :: handle, i, j, max_block, &
                                                   ncol_global, nrow_global
       TYPE(mp_para_env_type), POINTER          :: para_env
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       INTEGER                                  :: i_block, icol_local, &
                                                   in, info, ipcol, &
                                                   iprow, irow_local, &
@@ -2280,7 +2284,7 @@ CONTAINS
          WRITE (unit, "(A2, A8, A10, A24)") "#", "Row", "Column", ADJUSTL("Value")
       END IF
 
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       num_pe = para_env%num_pe
       mepos = para_env%mepos
       rb = nrow_global
@@ -2376,7 +2380,7 @@ CONTAINS
       INTEGER                                  :: handle, j, max_block, &
                                                   ncol_global, nrow_global
       TYPE(mp_para_env_type), POINTER          :: para_env
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       INTEGER                                  :: k, n_cols
       REAL(KIND=dp), DIMENSION(:, :), POINTER  :: vecbuf
 #endif
@@ -2386,7 +2390,7 @@ CONTAINS
       CALL cp_fm_get_info(fm, nrow_global=nrow_global, ncol_global=ncol_global, ncol_block=max_block, &
                           para_env=para_env)
 
-#if defined(__parallel)
+#if defined(__SCALAPACK)
 
       ! the parallel case could be made more efficient (see cp_fm_write_unformatted)
 
@@ -2449,7 +2453,7 @@ CONTAINS
       INTEGER                                            :: ictxt
       CHARACTER(LEN=1)                                   :: prec
       INTEGER                                            :: res
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       INTEGER                                            :: pilaenv
       res = pilaenv(ictxt, prec)
 #else

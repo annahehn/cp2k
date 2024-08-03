@@ -33,7 +33,7 @@ MODULE cp_blacs_types
 
    TYPE cp_blacs_type
       PRIVATE
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       INTEGER :: context_handle = -1
 #endif
       INTEGER, DIMENSION(2), PUBLIC :: mepos = -1, num_pe = -1
@@ -73,11 +73,12 @@ CONTAINS
       CLASS(mp_comm_type), INTENT(IN) :: comm
       CHARACTER(len=1), INTENT(IN):: order
       INTEGER, INTENT(IN)    :: nprow, npcol
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       INTEGER :: context_handle
       context_handle = comm%get_handle()
       CALL blacs_gridinit(context_handle, order, nprow, npcol)
       this%context_handle = context_handle
+
 #if defined(__DLAF)
       CALL cp_dlaf_create_grid(context_handle)
 #endif
@@ -97,8 +98,9 @@ CONTAINS
 ! **************************************************************************************************
    SUBROUTINE cp_blacs_gridexit(this)
       CLASS(cp_blacs_type), INTENT(IN) :: this
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       CALL blacs_gridexit(this%context_handle)
+
 #if defined(__DLAF)
       CALL cp_dlaf_free_grid(this%context_handle)
 #endif
@@ -113,7 +115,7 @@ CONTAINS
 ! **************************************************************************************************
    SUBROUTINE cp_blacs_gridinfo(this)
       CLASS(cp_blacs_type), INTENT(INOUT)  :: this
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       CALL blacs_gridinfo(this%context_handle, this%num_pe(1), this%num_pe(2), this%mepos(1), this%mepos(2))
 #else
       MARK_USED(this)
@@ -138,7 +140,7 @@ CONTAINS
    SUBROUTINE cp_blacs_set(this, what, val)
       CLASS(cp_blacs_type), INTENT(IN) :: this
       INTEGER, INTENT(IN)  :: what, val
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       CALL blacs_set(this%context_handle, what, val)
 #else
       MARK_USED(this)
@@ -162,7 +164,7 @@ CONTAINS
       CHARACTER(len=1), INTENT(IN) :: SCOPE, TOP
       INTEGER, INTENT(IN)     :: M, N, LDA
       COMPLEX(KIND=dp)            :: A
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       CALL zgebs2d(this%context_handle, SCOPE, TOP, M, N, A, LDA)
 #else
       MARK_USED(this)
@@ -192,7 +194,7 @@ CONTAINS
       INTEGER, INTENT(IN)     :: M, N, LDA
       INTEGER, INTENT(IN)     :: RSRC, CSRC
       COMPLEX(KIND=dp)            :: A
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       CALL zgebr2d(this%context_handle, SCOPE, TOP, M, N, A, LDA, RSRC, CSRC)
 #else
       MARK_USED(this)
@@ -222,7 +224,7 @@ CONTAINS
       CHARACTER(len=1), INTENT(IN) :: SCOPE, TOP
       INTEGER, INTENT(IN)     :: M, N, LDA
       REAL(KIND=dp)               :: A
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       CALL dgebs2d(this%context_handle, SCOPE, TOP, M, N, A, LDA)
 #else
       MARK_USED(this)
@@ -252,7 +254,7 @@ CONTAINS
       INTEGER, INTENT(IN)     :: M, N, LDA
       INTEGER, INTENT(IN)     :: RSRC, CSRC
       REAL(KIND=dp)               :: A
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       CALL dgebr2d(this%context_handle, SCOPE, TOP, M, N, A, LDA, RSRC, CSRC)
 #else
       MARK_USED(this)
@@ -274,7 +276,7 @@ CONTAINS
 ! **************************************************************************************************
    ELEMENTAL INTEGER FUNCTION cp_blacs_get_handle(this)
       CLASS(cp_blacs_type), INTENT(IN) :: this
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       cp_blacs_get_handle = this%context_handle
 #else
       MARK_USED(this)
@@ -290,7 +292,7 @@ CONTAINS
 ! **************************************************************************************************
    ELEMENTAL LOGICAL FUNCTION cp_context_is_equal(this, other)
       CLASS(cp_blacs_type), INTENT(IN) :: this, other
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       cp_context_is_equal = (this%context_handle == other%context_handle)
 #else
       MARK_USED(this)
@@ -307,7 +309,7 @@ CONTAINS
 ! **************************************************************************************************
    ELEMENTAL LOGICAL FUNCTION cp_context_is_not_equal(this, other)
       CLASS(cp_blacs_type), INTENT(IN) :: this, other
-#if defined(__parallel)
+#if defined(__SCALAPACK)
       cp_context_is_not_equal = (this%context_handle /= other%context_handle)
 #else
       MARK_USED(this)

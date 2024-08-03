@@ -92,7 +92,7 @@ CONTAINS
       INTEGER :: handle, i_rep, ispin, mark_ind, mark_number, n_rep, orig_mo_index, &
          orig_spin_index, orig_type, restart_unit, result_mo_index, result_spin_index
       LOGICAL                                            :: explicit, is_file, my_for_rtp, &
-                                                            overwrite_mos, reverse_mo_index
+                                                            overwrite_mos
       REAL(KIND=dp)                                      :: orig_scale, orthonormality, result_scale
       TYPE(cp_fm_struct_type), POINTER                   :: fm_struct_vector
       TYPE(cp_fm_type)                                   :: matrix_x, matrix_y
@@ -142,7 +142,7 @@ CONTAINS
             CALL section_vals_val_get(update_section, "RESULT_MO_INDEX", i_rep_section=i_rep, i_val=result_mo_index)
             CALL section_vals_val_get(update_section, "RESULT_MARKED_STATE", i_rep_section=i_rep, i_val=mark_number)
             CALL section_vals_val_get(update_section, "RESULT_SPIN_INDEX", i_rep_section=i_rep, i_val=result_spin_index)
-            ! result_scale is the 'a' coefficient
+            ! result_scale is the 'b' coefficient
             CALL section_vals_val_get(update_section, "RESULT_SCALE", i_rep_section=i_rep, r_val=result_scale)
 
             mark_ind = 1
@@ -154,7 +154,7 @@ CONTAINS
             CALL section_vals_val_get(update_section, "ORIG_MO_INDEX", i_rep_section=i_rep, i_val=orig_mo_index)
             CALL section_vals_val_get(update_section, "ORIG_MARKED_STATE", i_rep_section=i_rep, i_val=mark_number)
             CALL section_vals_val_get(update_section, "ORIG_SPIN_INDEX", i_rep_section=i_rep, i_val=orig_spin_index)
-            ! orig_scale is the 'b' coefficient
+            ! orig_scal is the 'a' coefficient
             CALL section_vals_val_get(update_section, "ORIG_SCALE", i_rep_section=i_rep, r_val=orig_scale)
 
             IF (orig_type == wfn_mix_orig_virtual) mark_ind = 2
@@ -162,19 +162,13 @@ CONTAINS
 
             CALL section_vals_val_get(wfn_mix_section, "OVERWRITE_MOS", l_val=overwrite_mos)
 
-            CALL section_vals_val_get(update_section, "REVERSE_MO_INDEX", i_rep_section=i_rep, l_val=reverse_mo_index)
-
             ! First get a copy of the proper orig
             ! Origin is in the MO matrix
             IF (orig_type == wfn_mix_orig_occ) THEN
-               IF (reverse_mo_index) THEN
-                  CALL cp_fm_to_fm(mos(orig_spin_index)%mo_coeff, matrix_x, 1, &
-                                   orig_mo_index, 1)
-               ELSE
-                  CALL cp_fm_to_fm(mos(orig_spin_index)%mo_coeff, matrix_x, 1, &
-                                   mos(orig_spin_index)%nmo - orig_mo_index + 1, 1)
-               END IF
-               ! Origin is in the virtual matrix
+               CALL cp_fm_to_fm(mos(orig_spin_index)%mo_coeff, matrix_x, 1, &
+                                mos(orig_spin_index)%nmo - orig_mo_index + 1, 1)
+
+               ! Orgin is in the virtual matrix
             ELSE IF (orig_type == wfn_mix_orig_virtual) THEN
                IF (.NOT. ASSOCIATED(unoccupied_orbs)) &
                   CALL cp_abort(__LOCATION__, &
@@ -182,7 +176,7 @@ CONTAINS
                                 "For instance, ask in the SCF section to compute virtual orbitals after the GS optimization.")
                CALL cp_fm_to_fm(unoccupied_orbs(orig_spin_index), matrix_x, 1, orig_mo_index, 1)
 
-               ! Origin is to be read from an external .wfn file
+               ! Orgin is to be read from an external .wfn file
             ELSE IF (orig_type == wfn_mix_orig_external) THEN
                CALL section_vals_val_get(update_section, "ORIG_EXT_FILE_NAME", i_rep_section=i_rep, &
                                          c_val=read_file_name)
@@ -213,13 +207,9 @@ CONTAINS
                                          rst_unit=restart_unit)
                IF (para_env%is_source()) CALL close_file(unit_number=restart_unit)
 
-               IF (reverse_mo_index) THEN
-                  CALL cp_fm_to_fm(mos_orig_ext(orig_spin_index)%mo_coeff, matrix_x, 1, &
-                                   orig_mo_index, 1)
-               ELSE
-                  CALL cp_fm_to_fm(mos_orig_ext(orig_spin_index)%mo_coeff, matrix_x, 1, &
-                                   mos_orig_ext(orig_spin_index)%nmo - orig_mo_index + 1, 1)
-               END IF
+               CALL cp_fm_to_fm(mos_orig_ext(orig_spin_index)%mo_coeff, matrix_x, 1, &
+                                mos_orig_ext(orig_spin_index)%nmo - orig_mo_index + 1, 1)
+
                DO ispin = 1, SIZE(mos_orig_ext)
                   CALL deallocate_mo_set(mos_orig_ext(ispin))
                END DO
@@ -227,25 +217,14 @@ CONTAINS
             END IF
 
             ! Second, get a copy of the target
-            IF (reverse_mo_index) THEN
-               CALL cp_fm_to_fm(mos_new(result_spin_index)%mo_coeff, matrix_y, &
-                                1, result_mo_index, 1)
-            ELSE
-               CALL cp_fm_to_fm(mos_new(result_spin_index)%mo_coeff, matrix_y, &
-                                1, mos_new(result_spin_index)%nmo - result_mo_index + 1, 1)
-            END IF
+            CALL cp_fm_to_fm(mos_new(result_spin_index)%mo_coeff, matrix_y, &
+                             1, mos_new(result_spin_index)%nmo - result_mo_index + 1, 1)
 
             ! Third, perform the mix
             CALL cp_fm_scale_and_add(result_scale, matrix_y, orig_scale, matrix_x)
-
             ! and copy back in the result mos
-            IF (reverse_mo_index) THEN
-               CALL cp_fm_to_fm(matrix_y, mos_new(result_spin_index)%mo_coeff, &
-                                1, 1, result_mo_index)
-            ELSE
-               CALL cp_fm_to_fm(matrix_y, mos_new(result_spin_index)%mo_coeff, &
-                                1, 1, mos_new(result_spin_index)%nmo - result_mo_index + 1)
-            END IF
+            CALL cp_fm_to_fm(matrix_y, mos_new(result_spin_index)%mo_coeff, &
+                             1, 1, mos_new(result_spin_index)%nmo - result_mo_index + 1)
          END DO
 
          CALL cp_fm_release(matrix_x)

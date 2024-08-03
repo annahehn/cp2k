@@ -4,9 +4,8 @@
 
 import argparse
 import re
-import collections
 from os import path
-from typing import Dict, TextIO, List
+from typing import TextIO, List
 
 
 USE_EXCEPTIONS = ("omp_lib", "omp_lib_kinds", "lapack")
@@ -33,9 +32,6 @@ def process_log_file(fhandle: TextIO) -> None:
 
     cur_sym = cur_proc = cur_derived_type = cur_value = stat_var = stat_stm = None
     skip_until_DT_END = inside_omp_parallel = False
-
-    # Counts for each derived type how many allocatable char components it has.
-    allocatable_chars_in_derived_type: Dict[str, int] = collections.Counter()
 
     for line in fhandle:
         line = line.strip()
@@ -70,10 +66,8 @@ def process_log_file(fhandle: TextIO) -> None:
                 assert cur_derived_type
                 ignore = cur_derived_type in ["c_ptr", "c_funptr"]
                 initializer = cur_value or ""
-                num_empty = sum(initializer.count(x) for x in [" () ", "(() ", " ())"])
-                num_alloc_chars = allocatable_chars_in_derived_type[cur_derived_type]
-                # Allocatable chars come with a hidden extra component for the length.
-                if not ignore and (not initializer or num_empty > num_alloc_chars):
+                is_incomplete = any(x in initializer for x in [" () ", "(() ", " ())"])
+                if not ignore and (not initializer or is_incomplete):
                     msg(f"Found type {cur_derived_type} without initializer", 16)
 
             # Parse new symbole.
@@ -83,11 +77,6 @@ def process_log_file(fhandle: TextIO) -> None:
             match = re_symbol.match(line)
             assert match
             cur_sym = match.group(1)
-
-        elif "(CHARACTER () 1 DEFERRED) ALLOCATABLE ())" in line:
-            # Needed to avoid false positives when detecting types without initializer.
-            assert cur_sym
-            allocatable_chars_in_derived_type[cur_sym] += 1
 
         elif line.startswith("type spec"):
             # Only look for derived types because we want to check their initializers.

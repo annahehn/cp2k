@@ -7,6 +7,5 @@
 ./scripts/stage0/install_intel.sh
 ./scripts/stage0/setup_buildtools.sh
 ./scripts/stage0/install_cmake.sh
-./scripts/stage0/install_ninja.sh
 
 #EOF

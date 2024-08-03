@@ -246,13 +246,6 @@ list(
   input_cp2k_colvar.F
   input_cp2k_constraints.F
   input_cp2k_dft.F
-  input_cp2k_print_dft.F
-  input_cp2k_scf.F
-  input_cp2k_as.F
-  input_cp2k_opt.F
-  input_cp2k_qs.F
-  input_cp2k_se.F
-  input_cp2k_xas.F
   input_cp2k_distribution.F
   input_cp2k_ec.F
   input_cp2k_eip.F
@@ -530,7 +523,6 @@ list(
   qs_diis.F
   qs_diis_types.F
   qs_dispersion_nonloc.F
-  qs_dispersion_d4.F
   qs_dispersion_pairpot.F
   qs_dispersion_types.F
   qs_dispersion_utils.F
@@ -1569,14 +1561,10 @@ endif()
 
 add_library(cp2k_link_libs INTERFACE)
 
-include_directories(${DFTD4_DFTD4})
-include_directories(${DFTD4_MCTC})
-
 # the order is important so keep it that way
 target_link_libraries(
   cp2k_link_libs
   INTERFACE
-    $<$<BOOL:${CP2K_USE_DFTD4}>:dftd4::dftd4>
     $<$<BOOL:${CP2K_USE_SIRIUS}>:sirius::sirius>
     $<$<BOOL:${CP2K_USE_VORI}>:cp2k::VORI::vori>
     $<$<BOOL:${CP2K_USE_PEXSI}>:cp2k::PEXSI::pexsi>
@@ -1584,7 +1572,6 @@ target_link_libraries(
     $<$<BOOL:${CP2K_USE_SPGLIB}>:Spglib::symspg>
     $<$<BOOL:${CP2K_USE_LIBXC}>:cp2k::Libxc::xc>
     $<$<BOOL:${CP2K_USE_ELPA}>:cp2k::ELPA::elpa>
-    $<$<BOOL:${CP2K_USE_PLUMED}>:cp2k::plumed::plumed>
     $<$<BOOL:${CP2K_USE_FFTW3_}>:cp2k::FFTW3::fftw3>
     $<$<AND:$<BOOL:${CP2K_USE_FFTW3_}>,$<BOOL:${CP2K_ENABLE_FFTW3_THREADS_SUPPORT}>>:cp2k::FFTW3::fftw3_threads>
     $<$<AND:$<BOOL:${CP2K_USE_FFTW3_}>,$<BOOL:${CP2K_ENABLE_FFTW3_OPENMP_SUPPORT}>>:cp2k::FFTW3::fftw3_omp>
@@ -1610,6 +1597,7 @@ target_compile_definitions(
   cp2k
   PUBLIC
     $<$<BOOL:${CP2K_USE_MPI}>:__parallel>
+    $<$<BOOL:${CP2K_USE_MPI}>:__SCALAPACK>
     $<$<BOOL:${CP2K_USE_MPI_F08}>:__MPI_F08>
     __COMPILE_DATE=\"${CP2K_TIMESTAMP}\"
     __COMPILE_HOST=\"${CP2K_HOST_NAME}\"
@@ -1620,12 +1608,11 @@ target_compile_definitions(
     $<$<CONFIG:DEBUG>:__HAS_IEEE_EXCEPTIONS>
     $<$<CONFIG:DEBUG>:__CHECK_DIAG>
     $<$<BOOL:${CP2K_USE_PEXSI}>:__PEXSI>
-    $<$<BOOL:${CP2K_USE_PLUMED}>:__PLUMED2>
+    $<$<BOOL:${CP2K_USE_PLUMED2}>:__PLUMED2>
     $<$<BOOL:${CP2K_USE_QUIP}>:__QUIP>
     $<$<BOOL:${CP2K_USE_MAXWELL}>:__LIBMAXWELL>
     $<$<BOOL:${CP2K_USE_VORI}>:__LIBVORI>
     $<$<BOOL:${CP2K_USE_SPGLIB}>:__SPGLIB>
-    $<$<BOOL:${CP2K_USE_DFTD4}>:__DFTD4>
     $<$<BOOL:${CP2K_USE_SIRIUS}>:__SIRIUS>
     $<$<BOOL:${CP2K_USE_SPLA}>:__SPLA>
     $<$<BOOL:${CP2K_USE_SpFFT}>:__SPFFT>

@@ -35,7 +35,13 @@ python3 -m venv /opt/venv
 export PATH="/opt/venv/bin:$PATH"
 
 # install python packages
-pip3 install -r /opt/cp2k/docs/requirements.txt
+# PLEASE KEEP DEPENDENCIES IN SYNC WITH /docs/README.md.
+pip3 install --quiet \
+  sphinx \
+  myst-parser \
+  sphinx_rtd_theme \
+  sphinxcontrib-youtube \
+  lxml
 
 echo -e "\n========== Generating Manual =========="
 
@@ -48,7 +54,7 @@ cd /workspace/artifacts/manual
 set +e # disable error trapping for remainder of script
 (
   set -e # abort if error is encountered
-  /opt/cp2k/docs/generate_input_reference.py ./cp2k_input.xml
+  /opt/cp2k/docs/generate_input_reference.py ./cp2k_input.xml ./references.html
   echo ""
   sphinx-build /opt/cp2k/docs/ /workspace/artifacts/manual -W -n --keep-going --jobs 16
   /opt/cp2k/docs/fix_github_links.py /workspace/artifacts/manual

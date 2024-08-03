@@ -16,7 +16,6 @@ caption: Getting Started
 titlesonly:
 maxdepth: 1
 ---
-getting-started/CMake.md
 getting-started/spack.md
 ```
 
