@@ -16,7 +16,9 @@ MODULE libgrpp_integrals
    USE orbital_pointers, ONLY: nco, &
                                ncoset
 #if defined(__LIBGRPP)
-   USE libgrpp, ONLY: libgrpp_init, libgrpp_type1_integrals, libgrpp_type2_integrals, &
+!   USE libgrpp, ONLY: libgrpp_init, libgrpp_type1_integrals, libgrpp_type2_integrals, &
+!                      libgrpp_type1_integrals_gradient, libgrpp_type2_integrals_gradient
+   USE libgrpp, ONLY: libgrpp_type1_integrals, libgrpp_type2_integrals, &
                       libgrpp_type1_integrals_gradient, libgrpp_type2_integrals_gradient
 #endif
 #include "./base/base_uses.f90"
@@ -91,7 +93,7 @@ CONTAINS
       REAL(dp), ALLOCATABLE, DIMENSION(:)                :: tmp, tmpx, tmpy, tmpz
       REAL(dp), DIMENSION(3)                             :: ra, rb, rc
 
-      CALL libgrpp_init()
+      !   CALL libgrpp_init()
 
       calc_forces = .FALSE.
       IF (PRESENT(pab) .AND. PRESENT(force_a) .AND. PRESENT(force_b)) calc_forces = .TRUE.
@@ -332,7 +334,7 @@ CONTAINS
       REAL(dp), ALLOCATABLE, DIMENSION(:)                :: tmp, tmpx, tmpz, tmpy
       REAL(dp), DIMENSION(3)                             :: ra, rb, rc
 
-      CALL libgrpp_init()
+      !    CALL libgrpp_init()
 
       calc_forces = .FALSE.
       IF (PRESENT(pab) .AND. PRESENT(force_a) .AND. PRESENT(force_b)) calc_forces = .TRUE.
@@ -580,7 +582,7 @@ CONTAINS
       REAL(dp), ALLOCATABLE, DIMENSION(:, :)             :: vab_f, tmpx, tmpy, tmpz
       REAL(dp), DIMENSION(3)                             :: ra, rb, rc
 
-      CALL libgrpp_init()
+      !   CALL libgrpp_init()
 
       !Contains the integrals necessary for the forces, with angular momenta from lmin-1 to lmax+1
       ALLOCATE (vab_f(npgfa*ncoset(la_max_set + 1), npgfb*ncoset(lb_max_set + 1)))
@@ -782,7 +784,7 @@ CONTAINS
       REAL(dp), ALLOCATABLE, DIMENSION(:, :)             :: vab_f, tmpx, tmpy, tmpz
       REAL(dp), DIMENSION(3)                             :: ra, rb, rc
 
-      CALL libgrpp_init()
+      !    CALL libgrpp_init()
 
       !Contains the integrals necessary for the forces, with angular momenta from lmin-1 to lmax+1
       ALLOCATE (vab_f(npgfa*ncoset(la_max_set + 1), npgfb*ncoset(lb_max_set + 1)))

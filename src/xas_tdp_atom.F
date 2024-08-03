@@ -28,12 +28,12 @@ MODULE xas_tdp_atom
    USE cp_control_types,                ONLY: dft_control_type,&
                                               qs_control_type
    USE cp_dbcsr_api,                    ONLY: &
-        dbcsr_copy, dbcsr_create, dbcsr_distribution_get, dbcsr_distribution_new, &
+        dbcsr_add, dbcsr_create, dbcsr_distribution_get, dbcsr_distribution_new, &
         dbcsr_distribution_release, dbcsr_distribution_type, dbcsr_filter, dbcsr_finalize, &
         dbcsr_get_block_p, dbcsr_get_stored_coordinates, dbcsr_iterator_blocks_left, &
         dbcsr_iterator_next_block, dbcsr_iterator_start, dbcsr_iterator_stop, dbcsr_iterator_type, &
-        dbcsr_p_type, dbcsr_put_block, dbcsr_release, dbcsr_replicate_all, dbcsr_set, dbcsr_type, &
-        dbcsr_type_antisymmetric, dbcsr_type_no_symmetry, dbcsr_type_symmetric
+        dbcsr_p_type, dbcsr_put_block, dbcsr_release, dbcsr_replicate_all, dbcsr_type, &
+        dbcsr_type_antisymmetric, dbcsr_type_symmetric
    USE cp_dbcsr_cholesky,               ONLY: cp_dbcsr_cholesky_decompose,&
                                               cp_dbcsr_cholesky_invert
    USE cp_dbcsr_operations,             ONLY: dbcsr_deallocate_matrix_set
@@ -3459,7 +3459,7 @@ CONTAINS
       END DO !ikind
 
       ! Build the matrix_soc based on the matrix_s (but anti-symmetric)
-      IF ((PRESENT(xas_atom_env)) .OR. all_potential_present) THEN
+      IF ((PRESENT(xas_atom_env)) .OR. (PRESENT(soc_atom_env))) THEN
          DO i = 1, 3
             CALL dbcsr_create(matrix_soc(i)%matrix, name="SOC MATRIX", template=matrix_s(1)%matrix, &
                               matrix_type=dbcsr_type_antisymmetric)
@@ -3478,18 +3478,16 @@ CONTAINS
 
          END DO !iat
          CALL dbcsr_iterator_stop(iter)
-      ELSE  ! pseudopotentials here
+
          DO i = 1, 3
-            CALL dbcsr_create(matrix_soc(i)%matrix, name="SOC MATRIX", template=matrix_s(1)%matrix, &
-                              matrix_type=dbcsr_type_no_symmetry)
-            CALL dbcsr_set(matrix_soc(i)%matrix, 0.0_dp)
-            CALL dbcsr_copy(matrix_soc(i)%matrix, soc_atom_env%soc_pp(i, 1)%matrix)
+            CALL dbcsr_finalize(matrix_soc(i)%matrix)
          END DO
       END IF
-
-      DO i = 1, 3
-         CALL dbcsr_finalize(matrix_soc(i)%matrix)
-      END DO
+      IF (.NOT. ((PRESENT(xas_atom_env)) .OR. all_potential_present)) THEN
+         DO i = 1, 3
+            CALL dbcsr_add(matrix_soc(i)%matrix, soc_atom_env%soc_pp(i, 1)%matrix, 1.0_dp, 1.0_dp)
+         END DO
+      END IF
 
       ! Clean-up
       DO ikind = 1, nkind

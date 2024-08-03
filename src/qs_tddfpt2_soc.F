@@ -1207,7 +1207,7 @@ CONTAINS
 
       CALL get_qs_kind_set(qs_kind_set, all_potential_present=all_potential_present)
       IF (.NOT. all_potential_present) THEN
-         CALL V_SOC_xyz_from_pseudopotential(qs_env, soc_atom_env%soc_pp)
+         CALL V_SOC_xyz_from_pseudopotential(qs_env, soc_atom_env%soc_pp, .TRUE.)
       END IF
 
       !! Prepare the atomic grid we need to calculate the SOC Operator in an Atomic basis

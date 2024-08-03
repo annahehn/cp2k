@@ -62,20 +62,22 @@ CONTAINS
 !>                 the imaginary unit, i.e. mat_V_SOC_xyz is real and antisymmetric
 !> \param qs_env ...
 !> \param mat_V_SOC_xyz ...
+!> \param keep_antisymmetry ...
 !> \par History
 !>    * 09.2023 created
 !> \author Jan Wilhelm
 ! **************************************************************************************************
-   SUBROUTINE V_SOC_xyz_from_pseudopotential(qs_env, mat_V_SOC_xyz)
+   SUBROUTINE V_SOC_xyz_from_pseudopotential(qs_env, mat_V_SOC_xyz, keep_antisymmetry)
       TYPE(qs_environment_type), POINTER                 :: qs_env
       TYPE(dbcsr_p_type), DIMENSION(:, :), POINTER       :: mat_V_SOC_xyz
+      LOGICAL, INTENT(IN), OPTIONAL                      :: keep_antisymmetry
 
       CHARACTER(LEN=*), PARAMETER :: routineN = 'V_SOC_xyz_from_pseudopotential'
 
       INTEGER                                            :: handle, img, nder, nimages, xyz
       INTEGER, DIMENSION(:, :, :), POINTER               :: cell_to_index
       LOGICAL                                            :: calculate_forces, do_kp, do_symmetric, &
-                                                            use_virial
+                                                            my_keep_antisymmetry, use_virial
       REAL(KIND=dp)                                      :: eps_ppnl
       TYPE(atomic_kind_type), DIMENSION(:), POINTER      :: atomic_kind_set
       TYPE(dbcsr_p_type), DIMENSION(:, :), POINTER       :: mat_l, mat_l_nosym, mat_pot_dummy, &
@@ -137,13 +139,15 @@ CONTAINS
                            eps_ppnl, nimages=nimages, cell_to_index=cell_to_index, &
                            basis_type="ORB", matrix_l=mat_l)
 
+      my_keep_antisymmetry = .FALSE.
+      IF (PRESENT(keep_antisymmetry) .AND. (keep_antisymmetry)) my_keep_antisymmetry = .TRUE.
       NULLIFY (mat_l_nosym)
       CALL dbcsr_allocate_matrix_set(mat_l_nosym, 3, nimages)
       DO xyz = 1, 3
          DO img = 1, nimages
 
             ALLOCATE (mat_l_nosym(xyz, img)%matrix)
-            IF (do_kp) THEN
+            IF (do_kp .OR. my_keep_antisymmetry) THEN
                CALL dbcsr_create(mat_l_nosym(xyz, img)%matrix, template=matrix_s(1, 1)%matrix, &
                                  matrix_type=dbcsr_type_antisymmetric)
                CALL dbcsr_copy(mat_l_nosym(xyz, img)%matrix, mat_l(xyz, img)%matrix)
@@ -161,7 +165,7 @@ CONTAINS
       DO xyz = 1, 3
          DO img = 1, nimages
             ALLOCATE (mat_V_SOC_xyz(xyz, img)%matrix)
-            IF (do_kp) THEN
+            IF (do_kp .OR. my_keep_antisymmetry) THEN
                ! mat_V_SOC_xyz^R with neighbor cell R actually has no symmetry
                ! mat_V_SOC_xyz^R_µν = mat_V_SOC_xyz^R_νµ* (the actual symmetry is
                ! mat_V_SOC_xyz^R_µν = mat_V_SOC_xyz^-R_νµ* )  but rskp_transform
